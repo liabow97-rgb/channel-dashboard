@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useCallback } from "react";
+import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   LineChart, Line, ComposedChart, ResponsiveContainer, Cell,
@@ -133,12 +133,20 @@ const CHANNEL_COLORS_LIST = [
   "#8b6bae", "#3b6978", "#c97b4b", "#5a8f6a", "#a45a7a",
 ];
 
+const TEAM_COLORS = [
+  "#2d6a8e", "#3a9e78", "#e8a838", "#d4605a", "#8b6bae",
+  "#3b6978", "#c97b4b", "#5a8f6a", "#a45a7a", "#4a90a4",
+];
+
 // ── Helpers ───────────────────────────────────────────
 const fmt = (v) => {
   if (v === 0 || v === null || v === undefined) return "—";
   const abs = Math.abs(v);
   if (abs >= 1e8) return (v / 1e8).toFixed(1) + "억";
-  if (abs >= 1e4) return (v / 1e4).toFixed(0) + "만";
+  if (abs >= 1e4) {
+    const man = Math.round(v / 1e4);
+    return man.toLocaleString() + "만";
+  }
   return v.toLocaleString();
 };
 
@@ -568,10 +576,11 @@ const UploadModal = ({ isOpen, onClose, onDataLoaded }) => {
 
   const handleApply = () => {
     if (!previewData) return;
+    const hasChannel = previewData.channelCount > 0;
     if (previewData.hasCompany) {
-      onDataLoaded({ type: "company", data: previewData.companyMonthly });
+      onDataLoaded({ type: "company", data: previewData.companyMonthly, isLast: !hasChannel });
     }
-    if (previewData.channelCount > 0) {
+    if (hasChannel) {
       onDataLoaded({ type: "channel", data: previewData.channelData });
     }
     onClose();
@@ -836,15 +845,224 @@ const UploadModal = ({ isOpen, onClose, onDataLoaded }) => {
   );
 };
 
+// ── Profit Pool Chart (custom SVG) ───────────────────
+const ProfitPoolChart = ({ data }) => {
+  const [hovered, setHovered] = useState(null);
+  const [tooltip, setTooltip] = useState({ show: false, x: 0, y: 0 });
+  const containerRef = useRef(null);
+
+  const margin = { top: 30, right: 20, bottom: 50, left: 55 };
+
+  // Y-axis: 한계이익률
+  const maxMargin = Math.max(...data.map(d => Math.abs(d.영업이익률)), 10);
+  const minMargin = Math.min(...data.map(d => d.영업이익률), 0);
+  const yMax = Math.ceil(maxMargin / 10) * 10 + 10;
+  const yMin = minMargin < 0 ? Math.floor(minMargin / 10) * 10 - 10 : 0;
+
+  // X-axis: cumulative revenue in 억원
+  const totalRevenue = data.reduce((s, d) => s + d.매출, 0);
+  const totalBillion = totalRevenue / 1e8;
+  // Nice x-axis max
+  const xMaxRaw = totalBillion;
+  const xStep = xMaxRaw > 2000 ? 500 : xMaxRaw > 1000 ? 200 : xMaxRaw > 500 ? 100 : xMaxRaw > 200 ? 50 : xMaxRaw > 100 ? 20 : 10;
+  const xMax = Math.ceil(xMaxRaw / xStep) * xStep || 1;
+
+  // Cumulative x positions in 억
+  let cumRevenue = 0;
+  const barsWithX = data.map(d => {
+    const item = { ...d, xStart억: cumRevenue / 1e8, width억: d.매출 / 1e8 };
+    cumRevenue += d.매출;
+    return item;
+  });
+
+  const handleMouse = (entry, e) => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    setHovered(entry.team);
+    setTooltip({ show: true, x: e.clientX - rect.left, y: e.clientY - rect.top });
+  };
+
+  const yTicks = [];
+  for (let v = yMin; v <= yMax; v += yMax > 60 ? 20 : 10) yTicks.push(v);
+
+  const xTicks = [];
+  for (let v = 0; v <= xMax; v += xStep) xTicks.push(v);
+
+  const chartW = 800 - margin.left - margin.right;
+  const chartH = 400 - margin.top - margin.bottom;
+  const toX = (억) => margin.left + (억 / xMax) * chartW;
+  const toY = (pct) => margin.top + ((yMax - pct) / (yMax - yMin)) * chartH;
+
+  return (
+    <div ref={containerRef} className="relative" style={{ width: "100%", height: 400 }}>
+      <svg width="100%" height="100%" viewBox="0 0 800 400" preserveAspectRatio="xMidYMid meet">
+        {/* Y-axis grid lines and labels */}
+        {yTicks.map(v => (
+          <g key={v}>
+            <line x1={margin.left} y1={toY(v)} x2={800 - margin.right} y2={toY(v)} stroke={PALETTE.border} strokeDasharray="3 3" />
+            <text x={margin.left - 8} y={toY(v) + 4} textAnchor="end" fontSize={10} fill={PALETTE.textSec}>{v}%</text>
+          </g>
+        ))}
+
+        {/* Axis labels */}
+        <text x={14} y={200} textAnchor="middle" fontSize={11} fill={PALETTE.textSec} fontWeight={600} transform="rotate(-90,14,200)">한계이익률 (%)</text>
+
+        {/* Zero line if needed */}
+        {yMin < 0 && (
+          <line x1={margin.left} y1={toY(0)} x2={800 - margin.right} y2={toY(0)} stroke={PALETTE.text} strokeWidth={1} strokeOpacity={0.3} />
+        )}
+
+        {/* Bars */}
+        {barsWithX.map((entry) => {
+          const barX = toX(entry.xStart억);
+          const barW = (entry.width억 / xMax) * chartW;
+          const marginVal = entry.영업이익률;
+          const zeroY = toY(0);
+          const isActive = hovered === entry.team;
+
+          let barY, barH;
+          if (marginVal >= 0) {
+            barY = toY(marginVal);
+            barH = zeroY - barY;
+          } else {
+            barY = zeroY;
+            barH = toY(marginVal) - zeroY;
+          }
+
+          const labelY = marginVal >= 0 ? barY - 6 : barY + barH + 14;
+          const labelX = barX + barW / 2;
+
+          return (
+            <g
+              key={entry.team}
+              onMouseMove={(e) => handleMouse(entry, e)}
+              onMouseLeave={() => { setHovered(null); setTooltip({ show: false, x: 0, y: 0 }); }}
+              style={{ cursor: "pointer" }}
+            >
+              <rect
+                x={barX + 1}
+                y={barY}
+                width={Math.max(barW - 2, 2)}
+                height={Math.max(barH, 1)}
+                fill={entry.color}
+                fillOpacity={isActive ? 0.9 : 0.7}
+                rx={2}
+                stroke={isActive ? entry.color : "none"}
+                strokeWidth={isActive ? 2 : 0}
+              />
+              {barW > 30 && (
+                <text
+                  x={labelX}
+                  y={marginVal >= 0 ? barY + Math.min(barH / 2 + 4, barH - 4) : barY + Math.min(barH / 2 + 4, barH - 4)}
+                  textAnchor="middle"
+                  fontSize={barW > 80 ? 11 : 9}
+                  fontWeight={600}
+                  fill="#fff"
+                  style={{ pointerEvents: "none" }}
+                >
+                  {entry.team.length > (barW > 80 ? 12 : 6) ? entry.team.slice(0, barW > 80 ? 12 : 6) + "…" : entry.team}
+                </text>
+              )}
+              <text
+                x={labelX}
+                y={labelY}
+                textAnchor="middle"
+                fontSize={10}
+                fontWeight={700}
+                fill={entry.color}
+                style={{ pointerEvents: "none" }}
+              >
+                {marginVal.toFixed(1)}%
+              </text>
+            </g>
+          );
+        })}
+
+        {/* Axes lines */}
+        <line x1={margin.left} y1={margin.top} x2={margin.left} y2={400 - margin.bottom} stroke={PALETTE.border} />
+        <line x1={margin.left} y1={400 - margin.bottom} x2={800 - margin.right} y2={400 - margin.bottom} stroke={PALETTE.border} />
+      </svg>
+
+      {/* Tooltip */}
+      {tooltip.show && hovered && (() => {
+        const entry = data.find(d => d.team === hovered);
+        if (!entry) return null;
+        return (
+          <div
+            className="absolute rounded-lg p-3 shadow-xl border pointer-events-none"
+            style={{
+              left: Math.min(tooltip.x + 12, 600),
+              top: tooltip.y - 10,
+              background: "rgba(255,255,255,0.97)",
+              borderColor: PALETTE.border,
+              backdropFilter: "blur(8px)",
+              zIndex: 10,
+            }}
+          >
+            <p className="text-xs font-bold mb-2" style={{ color: entry.color }}>{entry.team}</p>
+            <div className="space-y-1 text-xs">
+              <div className="flex justify-between gap-4">
+                <span style={{ color: PALETTE.textSec }}>매출:</span>
+                <span className="font-semibold" style={{ color: PALETTE.text }}>{fmtBillion(entry.매출)}</span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span style={{ color: PALETTE.textSec }}>한계이익:</span>
+                <span className="font-semibold" style={{ color: entry.한계이익 >= 0 ? "#16825d" : PALETTE.accent4 }}>{fmtBillion(entry.한계이익)}</span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span style={{ color: PALETTE.textSec }}>한계이익률:</span>
+                <span className="font-semibold" style={{ color: PALETTE.text }}>{entry.영업이익률.toFixed(1)}%</span>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+    </div>
+  );
+};
+
 // ── Main Dashboard ────────────────────────────────────
 export default function ChannelDashboard() {
   const [globalMonth, setGlobalMonth] = useState("1월");
-  const [showChannelFilter, setShowChannelFilter] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
+  const [storageLoading, setStorageLoading] = useState(true);
 
   // Mutable data state
   const [companyMonthly, setCompanyMonthly] = useState(defaultCompanyMonthly);
   const [channelData, setChannelData] = useState(defaultChannelData);
+
+  // ── Persistent Storage (shared) ──
+  // Load saved data on mount
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const result = await window.storage.get("dashboard-data", true);
+        if (result && result.value) {
+          const parsed = JSON.parse(result.value);
+          if (parsed.companyMonthly) setCompanyMonthly(parsed.companyMonthly);
+          if (parsed.channelData) setChannelData(parsed.channelData);
+        }
+      } catch (e) {
+        // No saved data or error — use defaults
+      } finally {
+        setStorageLoading(false);
+      }
+    };
+    loadData();
+  }, []);
+
+  // Save to storage helper
+  const saveToStorage = async (company, channel) => {
+    try {
+      await window.storage.set(
+        "dashboard-data",
+        JSON.stringify({ companyMonthly: company, channelData: channel, updatedAt: new Date().toISOString() }),
+        true // shared: visible to all users
+      );
+    } catch (e) {
+      console.error("Storage save failed:", e);
+    }
+  };
 
   const ALL_CHANNELS = useMemo(() => Object.keys(channelData), [channelData]);
 
@@ -857,6 +1075,30 @@ export default function ChannelDashboard() {
   }, [ALL_CHANNELS]);
 
   const [selectedChannels, setSelectedChannels] = useState(new Set(ALL_CHANNELS));
+  const [selectedTeam, setSelectedTeam] = useState("전체");
+  const [showChannelFilter, setShowChannelFilter] = useState(false);
+
+  // Derive all teams
+  const ALL_TEAMS = useMemo(() => {
+    const teams = new Set();
+    ALL_CHANNELS.forEach(ch => teams.add(channelData[ch].team));
+    return ["전체", ...Array.from(teams)];
+  }, [ALL_CHANNELS, channelData]);
+
+  // Stable team → color mapping (order won't change across months)
+  const TEAM_COLOR_MAP = useMemo(() => {
+    const map = {};
+    ALL_TEAMS.forEach((t, i) => {
+      if (t !== "전체") map[t] = TEAM_COLORS[(i - 1) % TEAM_COLORS.length];
+    });
+    return map;
+  }, [ALL_TEAMS]);
+
+  // Channels filtered by selected team
+  const filteredChannels = useMemo(() => {
+    if (selectedTeam === "전체") return ALL_CHANNELS;
+    return ALL_CHANNELS.filter(ch => channelData[ch].team === selectedTeam);
+  }, [selectedTeam, ALL_CHANNELS, channelData]);
 
   // Keep selectedChannels in sync when channels change
   const prevChannelsRef = useRef(ALL_CHANNELS);
@@ -865,32 +1107,66 @@ export default function ChannelDashboard() {
     setSelectedChannels(new Set(ALL_CHANNELS));
   }
 
+  // When team filter changes, auto-select all channels of that team
+  const prevTeamRef = useRef(selectedTeam);
+  if (prevTeamRef.current !== selectedTeam) {
+    prevTeamRef.current = selectedTeam;
+    setSelectedChannels(new Set(selectedTeam === "전체" ? ALL_CHANNELS : filteredChannels));
+  }
+
   const toggleChannel = (ch) => {
     setSelectedChannels((prev) => {
       const next = new Set(prev);
-      if (next.has(ch)) { if (next.size > 1) next.delete(ch); }
+      if (next.has(ch)) next.delete(ch);
       else next.add(ch);
       return next;
     });
   };
 
-  const selectAll = () => setSelectedChannels(new Set(ALL_CHANNELS));
+  const selectAllFiltered = () => setSelectedChannels(new Set(filteredChannels));
+  const deselectAllFiltered = () => {
+    setSelectedChannels(prev => {
+      const next = new Set(prev);
+      filteredChannels.forEach(ch => next.delete(ch));
+      return next;
+    });
+  };
 
-  const handleDataLoaded = ({ type, data }) => {
+  const pendingCompanyRef = useRef(null);
+
+  const handleDataLoaded = ({ type, data, isLast }) => {
     if (type === "company") {
+      pendingCompanyRef.current = data;
       setCompanyMonthly(data);
+      // If only company data (no channel), save immediately
+      if (isLast) {
+        saveToStorage(data, channelData);
+        pendingCompanyRef.current = null;
+      }
     } else {
       setChannelData(data);
+      const companyToSave = pendingCompanyRef.current || companyMonthly;
+      pendingCompanyRef.current = null;
+      saveToStorage(companyToSave, data);
     }
   };
 
   // ─ Derived data ─
+  // Global month → KPI only
   const isYearly = globalMonth === "전체";
   const monthIndex = isYearly ? -1 : MONTHS.indexOf(globalMonth);
 
-  // Helper: get channel monthly data for selected month or sum all months
-  const getChannelMonth = (ch) => {
-    if (isYearly) {
+  // Per-chart month states
+  const [teamPoolMonth, setTeamPoolMonth] = useState("1월");
+  const [teamCostMonth, setTeamCostMonth] = useState("1월");
+  const [costMonth, setCostMonth] = useState("1월");
+  const [tableMonth, setTableMonth] = useState("1월");
+  const [tableTeam, setTableTeam] = useState("전체");
+  const [channelPoolMonth, setChannelPoolMonth] = useState("1월");
+
+  // Helper: get channel data for a specific month (or yearly)
+  const getChannelMonthBy = (ch, m) => {
+    if (m === "전체") {
       const all = channelData[ch].monthly;
       const sum매출 = all.reduce((s, d) => s + d.매출, 0);
       const sum매출원가 = all.reduce((s, d) => s + d.매출원가, 0);
@@ -905,10 +1181,15 @@ export default function ChannelDashboard() {
         한계이익: sum한계이익, 한계이익률: sum매출 > 0 ? (sum한계이익 / sum매출) * 100 : 0,
       };
     }
-    return channelData[ch].monthly[monthIndex];
+    return channelData[ch].monthly[MONTHS.indexOf(m)];
   };
 
-  // Company row for KPI
+  // Backward-compat wrapper using globalMonth
+  const getChannelMonth = (ch) => getChannelMonthBy(ch, globalMonth);
+
+  const labelFor = (m) => m === "전체" ? "연간 누계" : `${m} 기준`;
+
+  // Company row for KPI (uses globalMonth)
   const companyRow = useMemo(() => {
     if (isYearly) {
       const all = companyMonthly;
@@ -932,9 +1213,10 @@ export default function ChannelDashboard() {
     return ((curr - prev) / Math.abs(prev)) * 100;
   };
 
+  // Section 2: Cost comparison (uses costMonth), sorted by revenue desc
   const costComparisonData = useMemo(() => {
     return ALL_CHANNELS.filter((ch) => selectedChannels.has(ch)).map((ch) => {
-      const d = getChannelMonth(ch);
+      const d = getChannelMonthBy(ch, costMonth);
       const rev = d.매출 || 1;
       return {
         channel: ch.length > 10 ? ch.slice(0, 10) + "…" : ch,
@@ -952,32 +1234,183 @@ export default function ChannelDashboard() {
         광고선전비율: d.매출 > 0 ? ((d.광고선전비 / rev) * 100) : 0,
         판매촉진비율: d.매출 > 0 ? ((d.판매촉진비 / rev) * 100) : 0,
       };
-    });
-  }, [selectedChannels, globalMonth, channelData, ALL_CHANNELS]);
+    }).sort((a, b) => b.매출 - a.매출);
+  }, [selectedChannels, costMonth, channelData, ALL_CHANNELS]);
 
-  // Top 10 channels by revenue
+  // Section 1.75: Team cost comparison (uses teamCostMonth), sorted by revenue desc
+  const teamCostData = useMemo(() => {
+    const teamMap = {};
+    ALL_CHANNELS.forEach((ch) => {
+      const team = channelData[ch].team;
+      const d = getChannelMonthBy(ch, teamCostMonth);
+      if (!teamMap[team]) {
+        teamMap[team] = { team, 매출: 0, 매출원가: 0, 운반비: 0, 지급수수료: 0, 광고선전비: 0, 판매촉진비: 0 };
+      }
+      teamMap[team].매출 += d.매출;
+      teamMap[team].매출원가 += d.매출원가;
+      teamMap[team].운반비 += d.운반비;
+      teamMap[team].지급수수료 += d.지급수수료;
+      teamMap[team].광고선전비 += d.광고선전비;
+      teamMap[team].판매촉진비 += d.판매촉진비;
+    });
+    return Object.values(teamMap)
+      .filter(t => t.매출 > 0)
+      .sort((a, b) => b.매출 - a.매출)
+      .map(t => {
+        const rev = t.매출 || 1;
+        return {
+          channel: t.team.length > 10 ? t.team.slice(0, 10) + "…" : t.team,
+          channelFull: t.team,
+          매출원가: t.매출원가,
+          운반비: t.운반비,
+          지급수수료: t.지급수수료,
+          광고선전비: t.광고선전비,
+          판매촉진비: t.판매촉진비,
+          매출: t.매출,
+          매출원가율: t.매출 > 0 ? ((t.매출원가 / rev) * 100) : 0,
+          운반비율: t.매출 > 0 ? ((t.운반비 / rev) * 100) : 0,
+          지급수수료율: t.매출 > 0 ? ((t.지급수수료 / rev) * 100) : 0,
+          광고선전비율: t.매출 > 0 ? ((t.광고선전비 / rev) * 100) : 0,
+          판매촉진비율: t.매출 > 0 ? ((t.판매촉진비 / rev) * 100) : 0,
+        };
+      });
+  }, [teamCostMonth, channelData, ALL_CHANNELS]);
+
+  // Section 1.5: Team Profit Pool (uses teamPoolMonth)
+  const teamProfitPoolData = useMemo(() => {
+    const teamMap = {};
+    ALL_CHANNELS.forEach((ch) => {
+      const team = channelData[ch].team;
+      const d = getChannelMonthBy(ch, teamPoolMonth);
+      if (!teamMap[team]) {
+        teamMap[team] = { team, 매출: 0, 한계이익: 0 };
+      }
+      teamMap[team].매출 += d.매출;
+      teamMap[team].한계이익 += d.한계이익;
+    });
+
+    const teams = Object.values(teamMap)
+      .filter(t => t.매출 > 0)
+      .sort((a, b) => {
+        const marginA = a.매출 > 0 ? (a.한계이익 / a.매출) * 100 : 0;
+        const marginB = b.매출 > 0 ? (b.한계이익 / b.매출) * 100 : 0;
+        return marginB - marginA;
+      });
+
+    const totalRevenue = teams.reduce((s, t) => s + t.매출, 0);
+    if (totalRevenue === 0) return [];
+
+    let cumX = 0;
+    return teams.map((t, i) => {
+      const shareWidth = (t.매출 / totalRevenue) * 100;
+      const margin = t.매출 > 0 ? (t.한계이익 / t.매출) * 100 : 0;
+      const item = {
+        team: t.team,
+        매출: t.매출,
+        한계이익: t.한계이익,
+        영업이익률: margin,
+        shareWidth,
+        x: cumX,
+        color: TEAM_COLOR_MAP[t.team] || TEAM_COLORS[i % TEAM_COLORS.length],
+      };
+      cumX += shareWidth;
+      return item;
+    });
+  }, [teamPoolMonth, channelData, ALL_CHANNELS]);
+
+  // Section 3: Table top 10 (uses tableMonth)
   const top10TableChannels = useMemo(() => {
     return ALL_CHANNELS
-      .map(ch => ({ ch, 매출: getChannelMonth(ch).매출 }))
+      .map(ch => ({ ch, 매출: getChannelMonthBy(ch, tableMonth).매출 }))
       .sort((a, b) => b.매출 - a.매출)
       .slice(0, 10)
       .map(item => item.ch);
-  }, [globalMonth, channelData, ALL_CHANNELS]);
+  }, [tableMonth, channelData, ALL_CHANNELS]);
 
-  const channelSalesData = useMemo(() => {
-    return top10TableChannels.map((ch) => {
-      const d = getChannelMonth(ch);
-      return {
-        channel: ch.length > 8 ? ch.slice(0, 8) + "…" : ch,
-        channelFull: ch,
-        매출: d.매출,
-        한계이익: d.한계이익,
-        한계이익률: d.한계이익률,
-      };
+  // Section 3: Table channels filtered by team, sorted by revenue desc
+  const tableChannels = useMemo(() => {
+    const pool = tableTeam === "전체" ? ALL_CHANNELS : ALL_CHANNELS.filter(ch => channelData[ch].team === tableTeam);
+    return pool
+      .map(ch => ({ ch, 매출: getChannelMonthBy(ch, tableMonth).매출 }))
+      .sort((a, b) => b.매출 - a.매출)
+      .map(item => item.ch);
+  }, [tableTeam, tableMonth, channelData, ALL_CHANNELS]);
+
+  // Section 4: Channel Profit Pool (uses channelPoolMonth) — top 10 + 그 외
+  const channelProfitPoolData = useMemo(() => {
+    const allSorted = ALL_CHANNELS
+      .map(ch => {
+        const d = getChannelMonthBy(ch, channelPoolMonth);
+        return { ch, 매출: d.매출, 한계이익: d.한계이익 };
+      })
+      .filter(t => t.매출 > 0)
+      .sort((a, b) => b.매출 - a.매출);
+
+    const top10 = allSorted.slice(0, 10);
+    const rest = allSorted.slice(10);
+
+    // Build entries: top10 as individual + "그 외" aggregated
+    const entries = top10.map(t => ({ team: t.ch, 매출: t.매출, 한계이익: t.한계이익 }));
+    if (rest.length > 0) {
+      const rest매출 = rest.reduce((s, t) => s + t.매출, 0);
+      const rest한계이익 = rest.reduce((s, t) => s + t.한계이익, 0);
+      if (rest매출 > 0) {
+        entries.push({ team: "그 외", 매출: rest매출, 한계이익: rest한계이익 });
+      }
+    }
+
+    // Sort by margin descending
+    entries.sort((a, b) => {
+      const mA = a.매출 > 0 ? (a.한계이익 / a.매출) * 100 : 0;
+      const mB = b.매출 > 0 ? (b.한계이익 / b.매출) * 100 : 0;
+      return mB - mA;
     });
-  }, [globalMonth, channelData, top10TableChannels]);
+
+    const totalRevenue = entries.reduce((s, t) => s + t.매출, 0);
+    if (totalRevenue === 0) return [];
+
+    let cumX = 0;
+    return entries.map((t, i) => {
+      const shareWidth = (t.매출 / totalRevenue) * 100;
+      const margin = t.매출 > 0 ? (t.한계이익 / t.매출) * 100 : 0;
+      const item = {
+        team: t.team,
+        매출: t.매출,
+        한계이익: t.한계이익,
+        영업이익률: margin,
+        shareWidth,
+        x: cumX,
+        color: t.team === "그 외" ? "#8b95a1" : CHANNEL_COLORS_LIST[i % CHANNEL_COLORS_LIST.length],
+      };
+      cumX += shareWidth;
+      return item;
+    });
+  }, [channelPoolMonth, channelData, ALL_CHANNELS]);
 
   const filterLabel = isYearly ? "연간 누계" : `${globalMonth} 기준`;
+
+  if (storageLoading) {
+    return (
+      <div
+        className="min-h-screen w-full flex items-center justify-center"
+        style={{
+          background: `linear-gradient(180deg, ${PALETTE.surface} 0%, #fff 100%)`,
+          fontFamily: "'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif",
+        }}
+      >
+        <div className="text-center">
+          <div
+            className="w-10 h-10 rounded-xl flex items-center justify-center mx-auto mb-3"
+            style={{ background: `linear-gradient(135deg, ${PALETTE.primary}, ${PALETTE.primaryLight})` }}
+          >
+            <BarChart3 size={20} color="#fff" />
+          </div>
+          <p className="text-sm font-semibold" style={{ color: PALETTE.text }}>대시보드 로딩 중...</p>
+          <p className="text-xs mt-1" style={{ color: PALETTE.textSec }}>저장된 데이터를 불러오고 있습니다</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -987,7 +1420,14 @@ export default function ChannelDashboard() {
         fontFamily: "'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif",
       }}
     >
-      {/* Fonts + scrollbar styles loaded globally via index.css and index.html */}
+      <style>{`
+        @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+        .recharts-cartesian-grid-horizontal line,
+        .recharts-cartesian-grid-vertical line { stroke: ${PALETTE.border}; stroke-dasharray: 3 3; }
+        .recharts-text { font-family: 'Pretendard', sans-serif !important; }
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-thumb { background: ${PALETTE.border}; border-radius: 4px; }
+      `}</style>
 
       {/* Upload Modal */}
       <UploadModal
@@ -1006,11 +1446,11 @@ export default function ChannelDashboard() {
                 style={{ background: `linear-gradient(180deg, ${PALETTE.accent3}, ${PALETTE.accent4})` }}
               />
               <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight" style={{ color: PALETTE.primary }}>
-                채널별 월간 실적 대시보드
+                2026 실적 대시보드
               </h1>
             </div>
             <p className="text-sm ml-5" style={{ color: PALETTE.textSec }}>
-              팀별 채널별 손익 실적 현황 · 2026년도
+              팀별 채널별 손익 실적 현황
             </p>
           </div>
           <button
@@ -1112,6 +1552,144 @@ export default function ChannelDashboard() {
           </div>
         </div>
 
+        {/* ── 팀별 분석 Divider ── */}
+        <div className="flex items-center gap-3 mb-6 mt-2">
+          <div
+            className="w-1.5 h-7 rounded-full"
+            style={{ background: `linear-gradient(180deg, ${PALETTE.accent3}, ${PALETTE.accent4})` }}
+          />
+          <h2 className="text-xl font-extrabold tracking-tight" style={{ color: PALETTE.primary }}>
+            팀별 분석
+          </h2>
+          <div className="flex-1 h-px" style={{ background: PALETTE.border }} />
+        </div>
+
+        {/* ══ SECTION 1.5: Team Profit Pool ══ */}
+        <div
+          className="rounded-2xl p-5 sm:p-6 mb-6"
+          style={{ background: PALETTE.white, border: `1px solid ${PALETTE.border}` }}
+        >
+          <SectionHeader
+            title="팀별 Profit Pool"
+            subtitle="Y축: 한계이익률(%) · 너비: 매출 규모"
+          >
+            <div className="flex gap-1 overflow-x-auto pb-1">
+              <FilterPill label="전체" active={teamPoolMonth === "전체"} onClick={() => setTeamPoolMonth("전체")} />
+              {MONTHS.map((m) => (
+                <FilterPill key={m} label={m} active={teamPoolMonth === m} onClick={() => setTeamPoolMonth(m)} />
+              ))}
+            </div>
+          </SectionHeader>
+          {teamProfitPoolData.length > 0 ? (
+            <ProfitPoolChart data={teamProfitPoolData} />
+          ) : (
+            <div className="flex items-center justify-center h-48">
+              <p className="text-sm" style={{ color: PALETTE.textSec }}>해당 기간에 매출 데이터가 없습니다.</p>
+            </div>
+          )}
+        </div>
+
+        {/* ══ SECTION 1.75: Team Cost Structure ══ */}
+        <div
+          className="rounded-2xl p-5 sm:p-6 mb-6"
+          style={{ background: PALETTE.white, border: `1px solid ${PALETTE.border}` }}
+        >
+          <SectionHeader
+            title="팀별 비용 구조 비교"
+          >
+            <div className="flex gap-1 overflow-x-auto pb-1">
+              <FilterPill label="전체" active={teamCostMonth === "전체"} onClick={() => setTeamCostMonth("전체")} />
+              {MONTHS.map((m) => (
+                <FilterPill key={m} label={m} active={teamCostMonth === m} onClick={() => setTeamCostMonth(m)} />
+              ))}
+            </div>
+          </SectionHeader>
+
+          {/* Cost legend */}
+          <div className="flex flex-wrap gap-3 mb-4">
+            {COST_COMPONENTS.map((c) => (
+              <div key={c} className="flex items-center gap-1.5 text-xs" style={{ color: PALETTE.textSec }}>
+                <span className="w-2.5 h-2.5 rounded-sm" style={{ background: COST_COLORS[c] }} />
+                {c}
+              </div>
+            ))}
+          </div>
+
+          <div style={{ width: "100%", height: 400 }}>
+            <ResponsiveContainer>
+              <BarChart
+                data={teamCostData}
+                margin={{ top: 10, right: 20, left: 0, bottom: 40 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                <XAxis
+                  dataKey="channel"
+                  tick={{ fontSize: 10, fill: PALETTE.textSec }}
+                  axisLine={false}
+                  tickLine={false}
+                  angle={-15}
+                  textAnchor="end"
+                  height={60}
+                />
+                <YAxis
+                  tick={{ fontSize: 11, fill: PALETTE.textSec }}
+                  axisLine={false}
+                  tickLine={false}
+                  tickFormatter={fmtAxis}
+                />
+                <Tooltip content={<CostTooltip />} />
+                {COST_COMPONENTS.map((c) => (
+                  <Bar
+                    key={c}
+                    dataKey={c}
+                    stackId="cost"
+                    fill={COST_COLORS[c]}
+                    name={c}
+                    radius={c === "판매촉진비" ? [3, 3, 0, 0] : [0, 0, 0, 0]}
+                  />
+                ))}
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* ── 채널별 분석 Divider ── */}
+        <div className="flex items-center gap-3 mb-6 mt-2">
+          <div
+            className="w-1.5 h-7 rounded-full"
+            style={{ background: `linear-gradient(180deg, ${PALETTE.accent1}, ${PALETTE.accent2})` }}
+          />
+          <h2 className="text-xl font-extrabold tracking-tight" style={{ color: PALETTE.primary }}>
+            채널별 분석
+          </h2>
+          <div className="flex-1 h-px" style={{ background: PALETTE.border }} />
+        </div>
+
+        {/* ══ SECTION 4: Top 10 Channel Profit Pool ══ */}
+        <div
+          className="rounded-2xl p-5 sm:p-6 mb-6"
+          style={{ background: PALETTE.white, border: `1px solid ${PALETTE.border}` }}
+        >
+          <SectionHeader
+            title="매출 Top 10 채널 Profit Pool"
+            subtitle="Y축: 한계이익률(%) · 너비: 매출 규모"
+          >
+            <div className="flex gap-1 overflow-x-auto pb-1">
+              <FilterPill label="전체" active={channelPoolMonth === "전체"} onClick={() => setChannelPoolMonth("전체")} />
+              {MONTHS.map((m) => (
+                <FilterPill key={m} label={m} active={channelPoolMonth === m} onClick={() => setChannelPoolMonth(m)} />
+              ))}
+            </div>
+          </SectionHeader>
+          {channelProfitPoolData.length > 0 ? (
+            <ProfitPoolChart data={channelProfitPoolData} />
+          ) : (
+            <div className="flex items-center justify-center h-48">
+              <p className="text-sm" style={{ color: PALETTE.textSec }}>해당 기간에 매출 데이터가 없습니다.</p>
+            </div>
+          )}
+        </div>
+
         {/* ══ SECTION 2: Channel Cost Structure ══ */}
         <div
           className="rounded-2xl p-5 sm:p-6 mb-6"
@@ -1119,46 +1697,98 @@ export default function ChannelDashboard() {
         >
           <SectionHeader
             title="채널별 비용 구조 비교"
-            subtitle={filterLabel}
-          />
+          >
+            <div className="flex gap-1 overflow-x-auto pb-1">
+              <FilterPill label="전체" active={costMonth === "전체"} onClick={() => setCostMonth("전체")} />
+              {MONTHS.map((m) => (
+                <FilterPill key={m} label={m} active={costMonth === m} onClick={() => setCostMonth(m)} />
+              ))}
+            </div>
+          </SectionHeader>
 
-          {/* Channel Filter */}
+          {/* Team & Channel Filter */}
           <div className="mb-4">
-            <button
-              onClick={() => setShowChannelFilter(!showChannelFilter)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
-              style={{ background: PALETTE.surfaceAlt, color: PALETTE.textSec, border: `1px solid ${PALETTE.border}` }}
-            >
-              <Filter size={13} />
-              채널 필터 ({selectedChannels.size}/{ALL_CHANNELS.length})
-              {showChannelFilter ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-            </button>
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Team Dropdown */}
+              <div className="relative">
+                <select
+                  value={selectedTeam}
+                  onChange={(e) => setSelectedTeam(e.target.value)}
+                  className="appearance-none pl-3 pr-7 py-1.5 rounded-lg text-xs font-medium cursor-pointer"
+                  style={{
+                    background: PALETTE.surfaceAlt,
+                    color: selectedTeam === "전체" ? PALETTE.textSec : PALETTE.primary,
+                    border: `1px solid ${PALETTE.border}`,
+                    outline: "none",
+                  }}
+                >
+                  {ALL_TEAMS.map(t => (
+                    <option key={t} value={t}>{t === "전체" ? "팀 전체" : t}</option>
+                  ))}
+                </select>
+                <ChevronDown size={12} color={PALETTE.textSec} className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+              </div>
+
+              {/* Channel Filter Toggle */}
+              <button
+                onClick={() => setShowChannelFilter(!showChannelFilter)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+                style={{ background: PALETTE.surfaceAlt, color: PALETTE.textSec, border: `1px solid ${PALETTE.border}` }}
+              >
+                <Filter size={13} />
+                채널 선택 ({filteredChannels.filter(ch => selectedChannels.has(ch)).length}/{filteredChannels.length})
+                {showChannelFilter ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+              </button>
+            </div>
+
             {showChannelFilter && (
               <div
-                className="mt-2 flex flex-wrap gap-2 p-3 rounded-xl"
+                className="mt-2 rounded-xl p-3"
                 style={{ background: PALETTE.surfaceAlt, border: `1px solid ${PALETTE.border}` }}
               >
-                <button
-                  onClick={selectAll}
-                  className="px-2.5 py-1 rounded-md text-xs font-medium"
-                  style={{ background: PALETTE.primary, color: "#fff" }}
-                >
-                  전체 선택
-                </button>
-                {ALL_CHANNELS.map((ch) => (
+                {/* Select all / Deselect all */}
+                <div className="flex gap-2 mb-2 pb-2" style={{ borderBottom: `1px solid ${PALETTE.border}` }}>
                   <button
-                    key={ch}
-                    onClick={() => toggleChannel(ch)}
-                    className="px-2.5 py-1 rounded-md text-xs font-medium transition-all"
-                    style={{
-                      background: selectedChannels.has(ch) ? CHANNEL_COLORS[ch] : "transparent",
-                      color: selectedChannels.has(ch) ? "#fff" : PALETTE.textSec,
-                      border: `1px solid ${selectedChannels.has(ch) ? CHANNEL_COLORS[ch] : PALETTE.border}`,
-                    }}
+                    onClick={selectAllFiltered}
+                    className="px-2.5 py-1 rounded-md text-xs font-medium"
+                    style={{ background: PALETTE.primary, color: "#fff" }}
                   >
-                    {ch}
+                    전체 선택
                   </button>
-                ))}
+                  <button
+                    onClick={deselectAllFiltered}
+                    className="px-2.5 py-1 rounded-md text-xs font-medium"
+                    style={{ background: PALETTE.white, color: PALETTE.textSec, border: `1px solid ${PALETTE.border}` }}
+                  >
+                    전체 해제
+                  </button>
+                </div>
+                {/* Checkbox list */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-1">
+                  {filteredChannels.map((ch) => (
+                    <label
+                      key={ch}
+                      className="flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition-all text-xs"
+                      style={{
+                        background: selectedChannels.has(ch) ? `${CHANNEL_COLORS[ch]}12` : "transparent",
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedChannels.has(ch)}
+                        onChange={() => toggleChannel(ch)}
+                        className="rounded"
+                        style={{ accentColor: CHANNEL_COLORS[ch] || PALETTE.accent1, width: 14, height: 14 }}
+                      />
+                      <span
+                        className="truncate font-medium"
+                        style={{ color: selectedChannels.has(ch) ? PALETTE.text : PALETTE.textSec }}
+                      >
+                        {ch}
+                      </span>
+                    </label>
+                  ))}
+                </div>
               </div>
             )}
           </div>
@@ -1218,12 +1848,39 @@ export default function ChannelDashboard() {
         >
           <SectionHeader
             title="채널별 실적 요약"
-            subtitle={`${filterLabel} · 매출 Top 10 채널`}
-          />
-          <div className="overflow-x-auto">
+          >
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Team filter for table */}
+              <div className="relative">
+                <select
+                  value={tableTeam}
+                  onChange={(e) => setTableTeam(e.target.value)}
+                  className="appearance-none pl-3 pr-7 py-1.5 rounded-lg text-xs font-medium cursor-pointer"
+                  style={{
+                    background: PALETTE.surfaceAlt,
+                    color: tableTeam === "전체" ? PALETTE.textSec : PALETTE.primary,
+                    border: `1px solid ${PALETTE.border}`,
+                    outline: "none",
+                  }}
+                >
+                  {ALL_TEAMS.map(t => (
+                    <option key={t} value={t}>{t === "전체" ? "팀 전체" : t}</option>
+                  ))}
+                </select>
+                <ChevronDown size={12} color={PALETTE.textSec} className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+              </div>
+              <div className="flex gap-1 overflow-x-auto pb-1">
+                <FilterPill label="전체" active={tableMonth === "전체"} onClick={() => setTableMonth("전체")} />
+                {MONTHS.map((m) => (
+                  <FilterPill key={m} label={m} active={tableMonth === m} onClick={() => setTableMonth(m)} />
+                ))}
+              </div>
+            </div>
+          </SectionHeader>
+          <div className="overflow-x-auto" style={{ maxHeight: 480, overflowY: "auto" }}>
             <table className="w-full text-xs sm:text-sm">
-              <thead>
-                <tr style={{ borderBottom: `2px solid ${PALETTE.primary}` }}>
+              <thead style={{ position: "sticky", top: 0, zIndex: 1 }}>
+                <tr style={{ borderBottom: `2px solid ${PALETTE.primary}`, background: PALETTE.white }}>
                   {["순위", "채널", "소속팀", "매출", "매출원가", "변동비 합계", "한계이익", "한계이익률"].map((h) => (
                     <th key={h} className="py-3 px-2 text-left font-semibold whitespace-nowrap" style={{ color: PALETTE.primary }}>
                       {h}
@@ -1232,8 +1889,8 @@ export default function ChannelDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {top10TableChannels.map((ch, i) => {
-                  const d = getChannelMonth(ch);
+                {tableChannels.map((ch, i) => {
+                  const d = getChannelMonthBy(ch, tableMonth);
                   const totalCost = d.운반비 + d.지급수수료 + d.광고선전비 + d.판매촉진비;
                   return (
                     <tr
@@ -1275,57 +1932,7 @@ export default function ChannelDashboard() {
           </div>
         </div>
 
-        {/* ══ SECTION 4: Channel Margin Bar ══ */}
-        <div
-          className="rounded-2xl p-5 sm:p-6 mb-6"
-          style={{ background: PALETTE.white, border: `1px solid ${PALETTE.border}` }}
-        >
-          <SectionHeader
-            title="채널별 매출 및 한계이익률(%)"
-            subtitle={filterLabel}
-          />
-          <div style={{ width: "100%", height: 340 }}>
-            <ResponsiveContainer>
-              <ComposedChart
-                data={channelSalesData}
-                margin={{ top: 24, right: 20, left: 0, bottom: 20 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis
-                  dataKey="channel"
-                  tick={{ fontSize: 10, fill: PALETTE.textSec }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  yAxisId="left"
-                  tick={{ fontSize: 11, fill: PALETTE.textSec }}
-                  axisLine={false}
-                  tickLine={false}
-                  tickFormatter={fmtAxis}
-                />
-                <Tooltip content={<CustomTooltip formatter={(name, val) => name.includes("한계이익률") ? fmtPct(val) : fmtBillion(val)} />} />
-                <Legend iconType="square" iconSize={10} wrapperStyle={{ fontSize: 11, paddingTop: 12 }} />
-                <Bar yAxisId="left" dataKey="매출" fill={PALETTE.primary} name="매출" radius={[3, 3, 0, 0]} barSize={28} />
-                <Bar yAxisId="left" dataKey="한계이익" fill={PALETTE.accent2} name="한계이익" radius={[3, 3, 0, 0]} barSize={28}>
-                  <LabelList
-                    dataKey="한계이익률"
-                    position="top"
-                    formatter={(v) => v > 0 ? v.toFixed(1) + "%" : ""}
-                    style={{ fontSize: 10, fontWeight: 700, fill: PALETTE.accent4 }}
-                  />
-                </Bar>
-              </ComposedChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
 
-        {/* ── Footer ── */}
-        <div className="text-center py-4">
-          <p className="text-xs" style={{ color: PALETTE.textSec }}>
-            데이터 기준: 2026년 1월 실적 (2~12월 데이터 미입력) · 팀별 채널별 손익 실적
-          </p>
-        </div>
       </div>
     </div>
   );
