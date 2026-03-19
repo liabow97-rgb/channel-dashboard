@@ -987,14 +987,7 @@ export default function ChannelDashboard() {
         fontFamily: "'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif",
       }}
     >
-      <style>{`
-        @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
-        .recharts-cartesian-grid-horizontal line,
-        .recharts-cartesian-grid-vertical line { stroke: ${PALETTE.border}; stroke-dasharray: 3 3; }
-        .recharts-text { font-family: 'Pretendard', sans-serif !important; }
-        ::-webkit-scrollbar { width: 4px; height: 4px; }
-        ::-webkit-scrollbar-thumb { background: ${PALETTE.border}; border-radius: 4px; }
-      `}</style>
+      {/* Fonts + scrollbar styles loaded globally via index.css and index.html */}
 
       {/* Upload Modal */}
       <UploadModal
