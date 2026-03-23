@@ -14,6 +14,7 @@ import {
 const MONTHS = ["1월","2월","3월","4월","5월","6월","7월","8월","9월","10월","11월","12월"];
 
 // ── Google Sheets CSV URLs ───────────────────────────
+const GSHEET_COMPANY_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSiHuxubXQn_N4x-K_D6Gj6cFqFnmzBK3RaXZskRnfZSRBmo0_yfSTwOh_k80saMwiK-UWkRWw3Mmdp/pub?gid=569939971&single=true&output=csv";
 const GSHEET_TEAM_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSiHuxubXQn_N4x-K_D6Gj6cFqFnmzBK3RaXZskRnfZSRBmo0_yfSTwOh_k80saMwiK-UWkRWw3Mmdp/pub?gid=0&single=true&output=csv";
 const GSHEET_CHANNEL_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSiHuxubXQn_N4x-K_D6Gj6cFqFnmzBK3RaXZskRnfZSRBmo0_yfSTwOh_k80saMwiK-UWkRWw3Mmdp/pub?gid=196016256&single=true&output=csv";
 
@@ -107,6 +108,34 @@ const splitCSVLine = (line) => {
   }
   result.push(current);
   return result.map(v => v.trim());
+};
+
+const parseCompanyCSV = (text) => {
+  const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).filter(l => l.trim());
+  if (lines.length < 2) return null;
+  // Header: 실적월,매출,매출원가,판관비,변동비,운반비,지급수수료,광고선전비,판매촉진비,고정비,영업이익
+  const monthly = MONTHS.map(m => ({
+    month: m, 매출: 0, 매출원가: 0, 변동비: 0, 고정비: 0, 영업이익: 0, 영업이익률: 0,
+  }));
+  for (let i = 1; i < lines.length; i++) {
+    const cols = splitCSVLine(lines[i]);
+    if (cols.length < 11) continue;
+    const month = parseInt(cols[0]);
+    if (!month || month < 1 || month > 12) continue;
+    const idx = month - 1;
+    const 매출 = parseCSVNum(cols[1]);
+    const 영업이익 = parseCSVNum(cols[10]);
+    monthly[idx] = {
+      month: MONTHS[idx],
+      매출,
+      매출원가: parseCSVNum(cols[2]),
+      변동비: parseCSVNum(cols[4]),
+      고정비: parseCSVNum(cols[9]),
+      영업이익,
+      영업이익률: 매출 > 0 ? (영업이익 / 매출) * 100 : 0,
+    };
+  }
+  return monthly;
 };
 
 const parseTeamCSV = (text) => {
@@ -704,41 +733,30 @@ export default function ChannelDashboard() {
   const [navSection, setNavSection] = useState("overview");
 
   // Mutable data state
+  const [companyMonthly, setCompanyMonthly] = useState(EMPTY_COMPANY_MONTHLY);
   const [teamData, setTeamData] = useState({});
   const [channelData, setChannelData] = useState({});
   const [uploadLogs, setUploadLogs] = useState([]);
-
-  // Derive companyMonthly from teamData (sum of all teams)
-  const companyMonthly = useMemo(() => {
-    const teams = Object.values(teamData);
-    if (teams.length === 0) return EMPTY_COMPANY_MONTHLY;
-    return MONTHS.map((m, i) => {
-      const sum = (key) => teams.reduce((s, t) => s + (t.monthly[i]?.[key] || 0), 0);
-      const 매출 = sum("매출");
-      const 한계이익 = sum("한계이익");
-      return {
-        month: m, 매출, 매출원가: sum("매출원가"), 변동비: sum("변동비"),
-        고정비: 0, 영업이익: 한계이익,
-        영업이익률: 매출 > 0 ? (한계이익 / 매출) * 100 : 0,
-      };
-    });
-  }, [teamData]);
 
   // ── Load data: Google Sheets (primary) → Storage (fallback) ──
   useEffect(() => {
     const fetchGoogleSheets = async () => {
       try {
-        const [teamRes, channelRes] = await Promise.all([
+        const [companyRes, teamRes, channelRes] = await Promise.all([
+          fetch(GSHEET_COMPANY_URL),
           fetch(GSHEET_TEAM_URL),
           fetch(GSHEET_CHANNEL_URL),
         ]);
-        if (!teamRes.ok || !channelRes.ok) throw new Error("Fetch failed");
+        if (!companyRes.ok || !teamRes.ok || !channelRes.ok) throw new Error("Fetch failed");
+        const companyText = await companyRes.text();
         const teamText = await teamRes.text();
         const channelText = await channelRes.text();
 
+        const companyResult = parseCompanyCSV(companyText);
         const teamResult = parseTeamCSV(teamText);
         const channelResult = parseChannelCSV(channelText);
 
+        if (companyResult) setCompanyMonthly(companyResult);
         if (teamResult && teamResult.teamCount > 0) setTeamData(teamResult.teamData);
         if (channelResult && channelResult.channelCount > 0) setChannelData(channelResult.channelData);
         return true;
@@ -752,6 +770,7 @@ export default function ChannelDashboard() {
         const result = await window.storage?.get("dashboard-data-v2", true);
         if (result && result.value) {
           const parsed = JSON.parse(result.value);
+          if (parsed.companyMonthly) setCompanyMonthly(parsed.companyMonthly);
           if (parsed.teamData) setTeamData(parsed.teamData);
           if (parsed.channelData) setChannelData(parsed.channelData);
           if (parsed.uploadLogs) setUploadLogs(parsed.uploadLogs);
@@ -769,23 +788,25 @@ export default function ChannelDashboard() {
     loadData();
   }, []);
 
-  const saveToStorage = async (newTeamData, newChannelData, newLogs) => {
+  const saveToStorage = async (newCompany, newTeamData, newChannelData, newLogs) => {
     try {
       if (window.storage?.set) {
         await window.storage.set(
           "dashboard-data-v2",
-          JSON.stringify({ teamData: newTeamData, channelData: newChannelData, uploadLogs: newLogs, updatedAt: new Date().toISOString() }),
+          JSON.stringify({ companyMonthly: newCompany, teamData: newTeamData, channelData: newChannelData, uploadLogs: newLogs, updatedAt: new Date().toISOString() }),
           true
         );
       }
     } catch (e) {
-      // Storage not available (e.g. GitHub Pages)
+      // Storage not available
     }
   };
 
+  const companyMonthlyRef = useRef(companyMonthly);
   const teamDataRef = useRef(teamData);
   const channelDataRef = useRef(channelData);
   const uploadLogsRef = useRef(uploadLogs);
+  companyMonthlyRef.current = companyMonthly;
   teamDataRef.current = teamData;
   channelDataRef.current = channelData;
   uploadLogsRef.current = uploadLogs;
@@ -801,11 +822,11 @@ export default function ChannelDashboard() {
     if (type === "team") {
       setTeamData(data);
       teamDataRef.current = data;
-      saveToStorage(data, channelDataRef.current, newLogs);
+      saveToStorage(companyMonthlyRef.current, data, channelDataRef.current, newLogs);
     } else {
       setChannelData(data);
       channelDataRef.current = data;
-      saveToStorage(teamDataRef.current, data, newLogs);
+      saveToStorage(companyMonthlyRef.current, teamDataRef.current, data, newLogs);
     }
   };
 
