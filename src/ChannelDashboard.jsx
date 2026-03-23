@@ -1,105 +1,21 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-  LineChart, Line, ComposedChart, ResponsiveContainer, Cell,
-  Area, Scatter, LabelList
+  Line, ComposedChart, ResponsiveContainer, Cell, LabelList
 } from "recharts";
 import {
-  TrendingUp, TrendingDown, DollarSign, BarChart3,
-  Filter, ChevronDown, ChevronUp, Building2, Globe,
-  Upload, FileSpreadsheet, X, Check, AlertCircle, File, Trash2
+  TrendingUp, DollarSign, BarChart3,
+  Filter, ChevronDown, ChevronUp, Globe,
+  Upload, FileSpreadsheet, X, Check, AlertCircle, File,
+  LayoutDashboard, Users, Store
 } from "lucide-react";
 
 // ── Data ──────────────────────────────────────────────
 const MONTHS = ["1월","2월","3월","4월","5월","6월","7월","8월","9월","10월","11월","12월"];
 
-const defaultCompanyMonthly = [
-  { month: "1월", 매출: 21877166965, 매출원가: 6995028423, 변동비: 7752646959, 고정비: 1812144354, 영업이익: 5317347229, 영업이익률: 24.3 },
-  { month: "2월", 매출: 0, 매출원가: 0, 변동비: 0, 고정비: 0, 영업이익: 0, 영업이익률: 0 },
-  { month: "3월", 매출: 0, 매출원가: 0, 변동비: 0, 고정비: 0, 영업이익: 0, 영업이익률: 0 },
-  { month: "4월", 매출: 0, 매출원가: 0, 변동비: 0, 고정비: 0, 영업이익: 0, 영업이익률: 0 },
-  { month: "5월", 매출: 0, 매출원가: 0, 변동비: 0, 고정비: 0, 영업이익: 0, 영업이익률: 0 },
-  { month: "6월", 매출: 0, 매출원가: 0, 변동비: 0, 고정비: 0, 영업이익: 0, 영업이익률: 0 },
-  { month: "7월", 매출: 0, 매출원가: 0, 변동비: 0, 고정비: 0, 영업이익: 0, 영업이익률: 0 },
-  { month: "8월", 매출: 0, 매출원가: 0, 변동비: 0, 고정비: 0, 영업이익: 0, 영업이익률: 0 },
-  { month: "9월", 매출: 0, 매출원가: 0, 변동비: 0, 고정비: 0, 영업이익: 0, 영업이익률: 0 },
-  { month: "10월", 매출: 0, 매출원가: 0, 변동비: 0, 고정비: 0, 영업이익: 0, 영업이익률: 0 },
-  { month: "11월", 매출: 0, 매출원가: 0, 변동비: 0, 고정비: 0, 영업이익: 0, 영업이익률: 0 },
-  { month: "12월", 매출: 0, 매출원가: 0, 변동비: 0, 고정비: 0, 영업이익: 0, 영업이익률: 0 },
-];
-
-const defaultChannelData = {
-  "올리브영": {
-    team: "브랜드영업1팀", type: "국내",
-    monthly: MONTHS.map((m, i) => ({
-      month: m,
-      매출: i === 0 ? 6086784035 : 0,
-      매출원가: i === 0 ? 2288647549 : 0,
-      운반비: i === 0 ? 413030212 : 0,
-      지급수수료: i === 0 ? 520854045 : 0,
-      광고선전비: i === 0 ? 85842510 : 0,
-      판매촉진비: i === 0 ? 85784459 : 0,
-      한계이익: i === 0 ? 2692625260 : 0,
-      한계이익률: i === 0 ? 44.2 : 0,
-    }))
-  },
-  "중화권_티몰/도우인콰징": {
-    team: "해외사업3팀", type: "해외",
-    monthly: MONTHS.map((m, i) => ({
-      month: m,
-      매출: i === 0 ? 1879266617 : 0,
-      매출원가: i === 0 ? 290195571 : 0,
-      운반비: i === 0 ? 30636587 : 0,
-      지급수수료: i === 0 ? 881596589 : 0,
-      광고선전비: i === 0 ? 462210773 : 0,
-      판매촉진비: i === 0 ? 91000 : 0,
-      한계이익: i === 0 ? 214536097 : 0,
-      한계이익률: i === 0 ? 11.4 : 0,
-    }))
-  },
-  "[B2B] 코스트코_미주": {
-    team: "해외사업2팀", type: "해외",
-    monthly: MONTHS.map((m, i) => ({
-      month: m,
-      매출: i === 0 ? 1788292800 : 0,
-      매출원가: i === 0 ? 624265132 : 0,
-      운반비: i === 0 ? 0 : 0,
-      지급수수료: i === 0 ? 2200000 : 0,
-      광고선전비: i === 0 ? 0 : 0,
-      판매촉진비: i === 0 ? 53792424 : 0,
-      한계이익: i === 0 ? 1108035244 : 0,
-      한계이익률: i === 0 ? 62.0 : 0,
-    }))
-  },
-  "일본_마루망(4팀)": {
-    team: "해외사업4팀", type: "해외",
-    monthly: MONTHS.map((m, i) => ({
-      month: m,
-      매출: i === 0 ? 1330998500 : 0,
-      매출원가: i === 0 ? 678006693 : 0,
-      운반비: i === 0 ? 13246540 : 0,
-      지급수수료: i === 0 ? 575000 : 0,
-      광고선전비: i === 0 ? 0 : 0,
-      판매촉진비: i === 0 ? 1468526 : 0,
-      한계이익: i === 0 ? 637701741 : 0,
-      한계이익률: i === 0 ? 47.9 : 0,
-    }))
-  },
-  "아마존": {
-    team: "해외사업2팀", type: "해외",
-    monthly: MONTHS.map((m, i) => ({
-      month: m,
-      매출: i === 0 ? 1138213701 : 0,
-      매출원가: i === 0 ? 89247616 : 0,
-      운반비: i === 0 ? 21461534 : 0,
-      지급수수료: i === 0 ? 463696893 : 0,
-      광고선전비: i === 0 ? 52232545 : 0,
-      판매촉진비: i === 0 ? 28389303 : 0,
-      한계이익: i === 0 ? 483185810 : 0,
-      한계이익률: i === 0 ? 42.5 : 0,
-    }))
-  },
-};
+const EMPTY_COMPANY_MONTHLY = MONTHS.map(m => ({
+  month: m, 매출: 0, 매출원가: 0, 변동비: 0, 고정비: 0, 영업이익: 0, 영업이익률: 0,
+}));
 
 const COST_COMPONENTS = ["매출원가", "운반비", "지급수수료", "광고선전비", "판매촉진비"];
 
@@ -167,25 +83,12 @@ const fmtFileSize = (bytes) => {
   return (bytes / (1024 * 1024)).toFixed(1) + " MB";
 };
 
-// ── CSV Parser for 팀별_채널_실적 format ─────────────
-const parseNum = (s) => {
-  if (!s || s === "0" || s.trim() === "") return 0;
-  const str = String(s).trim();
-  const isNeg = str.startsWith("(") && str.endsWith(")");
-  const cleaned = str.replace(/[(),"%﻿]/g, "").replace(/,/g, "").trim();
+// ── CSV Parsers for new format ────────────────────────
+const parseCSVNum = (s) => {
+  if (!s || s.trim() === "" || s.trim() === "-") return 0;
+  const cleaned = String(s).replace(/[,"﻿\s]/g, "").trim();
   const n = parseFloat(cleaned);
-  if (isNaN(n)) return 0;
-  return isNeg ? -n : n;
-};
-
-const parsePctVal = (s) => {
-  if (!s || s.trim() === "" || s === "0") return 0;
-  const str = String(s).trim();
-  const isNeg = str.startsWith("(") && str.endsWith(")");
-  const cleaned = str.replace(/[(),"%﻿]/g, "").replace(/,/g, "").trim();
-  const n = parseFloat(cleaned);
-  if (isNaN(n)) return 0;
-  return isNeg ? -n : n;
+  return isNaN(n) ? 0 : n;
 };
 
 const splitCSVLine = (line) => {
@@ -202,137 +105,75 @@ const splitCSVLine = (line) => {
   return result.map(v => v.trim());
 };
 
-const parseUploadCSV = (text) => {
-  const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/);
-  // Find header row (팀,채널,항목,...)
-  let headerIdx = -1;
-  for (let i = 0; i < Math.min(10, lines.length); i++) {
-    if (lines[i].includes("팀") && lines[i].includes("채널") && lines[i].includes("항목")) {
-      headerIdx = i; break;
+const parseTeamCSV = (text) => {
+  const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).filter(l => l.trim());
+  if (lines.length < 2) return null;
+  // Header: 실적월,부서명,매출,매출원가,변동비,운반비,지급수수료,광고선전비,판매촉진비,한계이익
+  const teamMap = {};
+  for (let i = 1; i < lines.length; i++) {
+    const cols = splitCSVLine(lines[i]);
+    if (cols.length < 10) continue;
+    const month = parseInt(cols[0]);
+    const team = cols[1]?.trim();
+    if (!month || !team) continue;
+    if (!teamMap[team]) {
+      teamMap[team] = { team, monthly: MONTHS.map(m => ({ month: m, 매출: 0, 매출원가: 0, 변동비: 0, 운반비: 0, 지급수수료: 0, 광고선전비: 0, 판매촉진비: 0, 한계이익: 0 })) };
+    }
+    const idx = month - 1;
+    if (idx >= 0 && idx < 12) {
+      teamMap[team].monthly[idx] = {
+        month: MONTHS[idx],
+        매출: parseCSVNum(cols[2]),
+        매출원가: parseCSVNum(cols[3]),
+        변동비: parseCSVNum(cols[4]),
+        운반비: parseCSVNum(cols[5]),
+        지급수수료: parseCSVNum(cols[6]),
+        광고선전비: parseCSVNum(cols[7]),
+        판매촉진비: parseCSVNum(cols[8]),
+        한계이익: parseCSVNum(cols[9]),
+      };
     }
   }
-  if (headerIdx < 0) return null;
+  return { teamData: teamMap, teamCount: Object.keys(teamMap).length };
+};
 
-  const dataLines = lines.slice(headerIdx + 1);
-
-  // Parse all rows
-  const rows = [];
-  for (const line of dataLines) {
-    if (!line.trim()) continue;
-    const cols = splitCSVLine(line);
-    if (cols.length < 16) continue;
-    rows.push({
-      팀: cols[0] || "",
-      채널: cols[1] || "",
-      항목: cols[2] || "",
-      누계: cols[3] || "",
-      months: cols.slice(4, 16), // 1월~12월
-    });
-  }
-
-  // ── Extract 전사 합계 (company data) ──
-  const companyItems = {};
-  const COMPANY_MAP = {
-    "전사매출합계": "매출",
-    "매출원가": "매출원가",
-    "전사변동비합계": "변동비",
-    "전사고정비합계": "고정비",
-    "전사영업이익": "영업이익",
-    "영업이익률": "영업이익률",
-  };
-  let inCompany = false;
-  for (const r of rows) {
-    if (r.팀 === "전사 합계") { inCompany = true; }
-    if (inCompany) {
-      if (COMPANY_MAP[r.항목]) {
-        companyItems[COMPANY_MAP[r.항목]] = r.months;
-      }
-      // Company section ends when we hit 영업이익률
-      if (r.항목 === "영업이익률") { inCompany = false; }
+const parseChannelCSV = (text) => {
+  const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).filter(l => l.trim());
+  if (lines.length < 2) return null;
+  // Header: 실적월,부서명,채널명,매출,매출원가,변동비,운반비,지급수수료,광고선전비,판매촉진비,한계이익
+  const channelMap = {};
+  for (let i = 1; i < lines.length; i++) {
+    const cols = splitCSVLine(lines[i]);
+    if (cols.length < 11) continue;
+    const month = parseInt(cols[0]);
+    const team = cols[1]?.trim();
+    const channel = cols[2]?.trim();
+    if (!month || !team || !channel) continue;
+    if (!channelMap[channel]) {
+      channelMap[channel] = {
+        team,
+        type: team.includes("해외") ? "해외" : "국내",
+        monthly: MONTHS.map(m => ({ month: m, 매출: 0, 매출원가: 0, 운반비: 0, 지급수수료: 0, 광고선전비: 0, 판매촉진비: 0, 한계이익: 0, 한계이익률: 0 })),
+      };
+    }
+    const idx = month - 1;
+    if (idx >= 0 && idx < 12) {
+      const 매출 = parseCSVNum(cols[3]);
+      const 한계이익 = parseCSVNum(cols[10]);
+      channelMap[channel].monthly[idx] = {
+        month: MONTHS[idx],
+        매출,
+        매출원가: parseCSVNum(cols[4]),
+        운반비: parseCSVNum(cols[6]),
+        지급수수료: parseCSVNum(cols[7]),
+        광고선전비: parseCSVNum(cols[8]),
+        판매촉진비: parseCSVNum(cols[9]),
+        한계이익,
+        한계이익률: 매출 > 0 ? (한계이익 / 매출) * 100 : 0,
+      };
     }
   }
-
-  // ── Extract channel data ──
-  // A channel block starts with row where 팀 is non-empty AND 채널 is non-empty
-  // AND 채널 is NOT "공통"/"전사 공통"/"해외 공통"/"국내 공통"
-  // AND 항목 is "매출"
-  // Subsequent rows with empty 팀 and empty 채널 belong to that channel
-  const SKIP_CHANNELS = new Set(["공통", "전사 공통", "해외 공통", "국내 공통"]);
-  const SKIP_TEAMS = new Set(["전사 합계", "해외 전체", "국내 전체"]);
-  const CHANNEL_ITEMS = new Set(["매출", "매출원가", "운반비", "지급수수료", "광고선전비", "판매촉진비", "한계이익", "한계이익률"]);
-
-  const channels = {};
-  let curTeam = "";
-  let curChannel = "";
-
-  for (const r of rows) {
-    // Detect new channel block
-    if (r.팀 && r.채널 && !SKIP_CHANNELS.has(r.채널) && r.항목 === "매출") {
-      // Skip team subtotals (e.g. "해외사업1팀 소계")
-      if (r.팀.includes("소계") || SKIP_TEAMS.has(r.팀)) {
-        curChannel = "";
-        continue;
-      }
-      curTeam = r.팀;
-      curChannel = r.채널;
-      if (!channels[curChannel]) {
-        channels[curChannel] = { team: curTeam, items: {} };
-      }
-      channels[curChannel].items["매출"] = r.months;
-      continue;
-    }
-
-    // Continuation rows (empty 팀 and 채널)
-    if (curChannel && r.팀 === "" && r.채널 === "" && CHANNEL_ITEMS.has(r.항목)) {
-      channels[curChannel].items[r.항목] = r.months;
-      // End of block after 한계이익률
-      if (r.항목 === "한계이익률") { curChannel = ""; }
-      continue;
-    }
-
-    // If we hit a row with non-empty 팀 but no 채널, it's a subtotal/section header — reset
-    if (r.팀 && !r.채널) {
-      curChannel = "";
-    }
-    // If we hit a "공통" row, reset channel
-    if (SKIP_CHANNELS.has(r.채널)) {
-      curChannel = "";
-    }
-  }
-
-  // Build result
-  const companyMonthly = MONTHS.map((m, i) => ({
-    month: m,
-    매출: parseNum(companyItems["매출"]?.[i]),
-    매출원가: parseNum(companyItems["매출원가"]?.[i]),
-    변동비: parseNum(companyItems["변동비"]?.[i]),
-    고정비: parseNum(companyItems["고정비"]?.[i]),
-    영업이익: parseNum(companyItems["영업이익"]?.[i]),
-    영업이익률: parsePctVal(companyItems["영업이익률"]?.[i]),
-  }));
-
-  const channelData = {};
-  for (const [chName, chInfo] of Object.entries(channels)) {
-    if (!chInfo.items["매출"]) continue;
-    channelData[chName] = {
-      team: chInfo.team,
-      type: chInfo.team.includes("해외") ? "해외" : "국내",
-      monthly: MONTHS.map((m, i) => ({
-        month: m,
-        매출: parseNum(chInfo.items["매출"]?.[i]),
-        매출원가: parseNum(chInfo.items["매출원가"]?.[i]),
-        운반비: parseNum(chInfo.items["운반비"]?.[i]),
-        지급수수료: parseNum(chInfo.items["지급수수료"]?.[i]),
-        광고선전비: parseNum(chInfo.items["광고선전비"]?.[i]),
-        판매촉진비: parseNum(chInfo.items["판매촉진비"]?.[i]),
-        한계이익: parseNum(chInfo.items["한계이익"]?.[i]),
-        한계이익률: parsePctVal(chInfo.items["한계이익률"]?.[i]),
-      })),
-    };
-  }
-
-  const channelCount = Object.keys(channelData).length;
-  return { companyMonthly, channelData, channelCount };
+  return { channelData: channelMap, channelCount: Object.keys(channelMap).length };
 };
 
 // ── Components ────────────────────────────────────────
@@ -391,12 +232,10 @@ const KPICard = ({ icon: Icon, label, value, sub, accent = false, change }) => (
 );
 
 const SectionHeader = ({ title, subtitle, children }) => (
-  <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-4 gap-2">
-    <div>
-      <h2 className="text-lg font-bold tracking-tight" style={{ color: PALETTE.text }}>{title}</h2>
-      {subtitle && <p className="text-xs mt-0.5" style={{ color: PALETTE.textSec }}>{subtitle}</p>}
-    </div>
-    {children}
+  <div className="mb-4">
+    <h2 className="text-lg font-bold tracking-tight" style={{ color: PALETTE.text }}>{title}</h2>
+    {subtitle && <p className="text-xs mt-0.5 mb-2" style={{ color: PALETTE.textSec }}>{subtitle}</p>}
+    {children && <div className="mt-2">{children}</div>}
   </div>
 );
 
@@ -491,103 +330,110 @@ const CostTooltip = ({ active, payload, label }) => {
 };
 
 // ── Upload Modal ──────────────────────────────────────
-const UploadModal = ({ isOpen, onClose, onDataLoaded }) => {
-  const [dragOver, setDragOver] = useState(false);
-  const [uploadedFiles, setUploadedFiles] = useState([]);
-  const [parseStatus, setParseStatus] = useState(null); // null | 'parsing' | 'success' | 'error'
-  const [parseMessage, setParseMessage] = useState("");
-  const [previewData, setPreviewData] = useState(null);
-  const fileInputRef = useRef(null);
+const UploadModal = ({ isOpen, onClose, onDataLoaded, uploadLogs }) => {
+  const [teamFile, setTeamFile] = useState(null);
+  const [channelFile, setChannelFile] = useState(null);
+  const [teamResult, setTeamResult] = useState(null); // { status, message, data }
+  const [channelResult, setChannelResult] = useState(null);
+  const teamInputRef = useRef(null);
+  const channelInputRef = useRef(null);
 
   const resetState = () => {
-    setUploadedFiles([]);
-    setParseStatus(null);
-    setParseMessage("");
-    setPreviewData(null);
+    setTeamFile(null); setChannelFile(null);
+    setTeamResult(null); setChannelResult(null);
   };
 
-  const handleFiles = useCallback((files) => {
-    const file = files[0];
+  const handleFile = (file, type) => {
     if (!file) return;
-
     const ext = file.name.split(".").pop().toLowerCase();
     if (!["csv", "tsv"].includes(ext)) {
-      setParseStatus("error");
-      setParseMessage("CSV 또는 TSV 파일만 업로드할 수 있습니다.");
+      const setter = type === "team" ? setTeamResult : setChannelResult;
+      setter({ status: "error", message: "CSV 파일만 업로드 가능합니다." });
       return;
     }
-
-    setUploadedFiles([{ name: file.name, size: file.size, type: ext.toUpperCase() }]);
-    setParseStatus("parsing");
-    setParseMessage("파일을 분석하고 있습니다...");
-
+    if (type === "team") setTeamFile(file); else setChannelFile(file);
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
         const text = e.target.result;
-        const result = parseUploadCSV(text);
-
-        if (!result) {
-          setParseStatus("error");
-          setParseMessage("팀별 채널별 손익 실적 형식의 CSV가 아닙니다.\n헤더 행에 '팀, 채널, 항목' 컬럼이 필요합니다.");
-          return;
+        if (type === "team") {
+          const result = parseTeamCSV(text);
+          if (!result || result.teamCount === 0) {
+            setTeamResult({ status: "error", message: "팀별 실적 데이터를 인식할 수 없습니다." });
+          } else {
+            setTeamResult({ status: "success", message: `${result.teamCount}개 팀 인식`, data: result.teamData });
+          }
+        } else {
+          const result = parseChannelCSV(text);
+          if (!result || result.channelCount === 0) {
+            setChannelResult({ status: "error", message: "채널별 실적 데이터를 인식할 수 없습니다." });
+          } else {
+            setChannelResult({ status: "success", message: `${result.channelCount}개 채널 인식`, data: result.channelData });
+          }
         }
-
-        const { companyMonthly: cm, channelData: cd, channelCount } = result;
-        const hasCompany = cm.some(r => r.매출 !== 0);
-        const hasChannel = channelCount > 0;
-
-        if (!hasCompany && !hasChannel) {
-          setParseStatus("error");
-          setParseMessage("파일에서 유효한 데이터를 찾을 수 없습니다.");
-          return;
-        }
-
-        // Build preview summary
-        const previewChannels = Object.entries(cd).slice(0, 5).map(([name, info]) => {
-          const janData = info.monthly[0];
-          return { 채널: name, 팀: info.team, "1월 매출": janData.매출 };
-        });
-
-        setPreviewData({
-          companyMonthly: cm,
-          channelData: cd,
-          channelCount,
-          hasCompany,
-          previewChannels,
-        });
-        setParseStatus("success");
-        setParseMessage(
-          `전사 데이터 ${hasCompany ? "✓" : "✗"} · 채널 ${channelCount}개 인식 완료`
-        );
       } catch (err) {
-        setParseStatus("error");
-        setParseMessage("파일 파싱 중 오류가 발생했습니다: " + err.message);
+        const setter = type === "team" ? setTeamResult : setChannelResult;
+        setter({ status: "error", message: "파싱 오류: " + err.message });
       }
     };
     reader.readAsText(file, "UTF-8");
-  }, []);
+  };
 
-  const handleDrop = useCallback((e) => {
-    e.preventDefault();
-    setDragOver(false);
-    handleFiles(e.dataTransfer.files);
-  }, [handleFiles]);
+  const canApply = (teamResult?.status === "success") || (channelResult?.status === "success");
 
   const handleApply = () => {
-    if (!previewData) return;
-    const hasChannel = previewData.channelCount > 0;
-    if (previewData.hasCompany) {
-      onDataLoaded({ type: "company", data: previewData.companyMonthly, isLast: !hasChannel });
+    if (teamResult?.status === "success") {
+      onDataLoaded({ type: "team", data: teamResult.data, fileName: teamFile?.name });
     }
-    if (hasChannel) {
-      onDataLoaded({ type: "channel", data: previewData.channelData });
+    if (channelResult?.status === "success") {
+      onDataLoaded({ type: "channel", data: channelResult.data, fileName: channelFile?.name });
     }
     onClose();
     resetState();
   };
 
   if (!isOpen) return null;
+
+  const FileSlot = ({ label, subtitle, file, result, inputRef, onFile, onClear }) => (
+    <div
+      className="rounded-xl p-4"
+      style={{ background: PALETTE.surface, border: `1px solid ${PALETTE.border}` }}
+    >
+      <div className="flex items-center justify-between mb-2">
+        <div>
+          <p className="text-xs font-bold" style={{ color: PALETTE.primary }}>{label}</p>
+          <p className="text-xs mt-0.5" style={{ color: PALETTE.textSec }}>{subtitle}</p>
+        </div>
+        {result?.status === "success" && <Check size={16} color="#16825d" />}
+        {result?.status === "error" && <AlertCircle size={16} color={PALETTE.accent4} />}
+      </div>
+      {!file ? (
+        <button
+          onClick={() => inputRef.current?.click()}
+          className="w-full py-3 rounded-lg text-xs font-medium transition-all"
+          style={{ border: `2px dashed ${PALETTE.border}`, color: PALETTE.textSec, background: PALETTE.white }}
+        >
+          <FileSpreadsheet size={16} className="inline mr-2" style={{ verticalAlign: "middle" }} />
+          CSV 파일 선택
+          <input ref={inputRef} type="file" accept=".csv,.tsv" className="hidden" onChange={(e) => onFile(e.target.files[0])} />
+        </button>
+      ) : (
+        <div className="flex items-center gap-2">
+          <File size={14} color={PALETTE.accent1} />
+          <span className="text-xs font-medium flex-1 truncate" style={{ color: PALETTE.text }}>{file.name}</span>
+          <span className="text-xs" style={{ color: PALETTE.textSec }}>{fmtFileSize(file.size)}</span>
+          <button onClick={onClear} className="p-1 rounded" style={{ background: PALETTE.surfaceAlt }}>
+            <X size={12} color={PALETTE.textSec} />
+          </button>
+        </div>
+      )}
+      {result && (
+        <p className="text-xs mt-2" style={{ color: result.status === "success" ? "#16825d" : PALETTE.accent4 }}>
+          {result.message}
+        </p>
+      )}
+    </div>
+  );
 
   return (
     <div
@@ -597,248 +443,73 @@ const UploadModal = ({ isOpen, onClose, onDataLoaded }) => {
     >
       <div
         className="w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden"
-        style={{
-          background: PALETTE.white,
-          border: `1px solid ${PALETTE.border}`,
-          animation: "modalIn 0.25s ease-out",
-        }}
+        style={{ background: PALETTE.white, border: `1px solid ${PALETTE.border}`, animation: "modalIn 0.25s ease-out" }}
       >
         <style>{`
-          @keyframes modalIn {
-            from { opacity: 0; transform: translateY(12px) scale(0.97); }
-            to { opacity: 1; transform: translateY(0) scale(1); }
-          }
-          @keyframes shimmer {
-            0% { background-position: -200% 0; }
-            100% { background-position: 200% 0; }
-          }
+          @keyframes modalIn { from { opacity:0; transform:translateY(12px) scale(0.97); } to { opacity:1; transform:translateY(0) scale(1); } }
         `}</style>
 
         {/* Header */}
-        <div
-          className="flex items-center justify-between px-6 py-4"
-          style={{ borderBottom: `1px solid ${PALETTE.border}` }}
-        >
+        <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: `1px solid ${PALETTE.border}` }}>
           <div className="flex items-center gap-3">
-            <div
-              className="w-9 h-9 rounded-lg flex items-center justify-center"
-              style={{ background: `linear-gradient(135deg, ${PALETTE.primary}, ${PALETTE.primaryLight})` }}
-            >
+            <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: `linear-gradient(135deg, ${PALETTE.primary}, ${PALETTE.primaryLight})` }}>
               <Upload size={16} color="#fff" strokeWidth={2} />
             </div>
             <div>
               <h3 className="text-sm font-bold" style={{ color: PALETTE.text }}>데이터 업로드</h3>
-              <p className="text-xs" style={{ color: PALETTE.textSec }}>CSV 파일로 대시보드 데이터를 갱신합니다</p>
+              <p className="text-xs" style={{ color: PALETTE.textSec }}>팀별·채널별 실적 CSV 파일을 각각 업로드합니다</p>
             </div>
           </div>
-          <button
-            onClick={() => { onClose(); resetState(); }}
-            className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
-            style={{ background: PALETTE.surfaceAlt }}
-          >
+          <button onClick={() => { onClose(); resetState(); }} className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: PALETTE.surfaceAlt }}>
             <X size={15} color={PALETTE.textSec} />
           </button>
         </div>
 
         {/* Body */}
-        <div className="px-6 py-5">
-          {/* Drop Zone */}
-          <div
-            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={handleDrop}
-            onClick={() => fileInputRef.current?.click()}
-            className="rounded-xl p-8 text-center cursor-pointer transition-all duration-200"
-            style={{
-              border: `2px dashed ${dragOver ? PALETTE.accent1 : PALETTE.border}`,
-              background: dragOver ? `${PALETTE.accent1}08` : PALETTE.surface,
-            }}
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".csv,.tsv"
-              className="hidden"
-              onChange={(e) => handleFiles(e.target.files)}
-            />
-            <div
-              className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4"
-              style={{
-                background: dragOver
-                  ? `linear-gradient(135deg, ${PALETTE.accent1}, ${PALETTE.accent2})`
-                  : PALETTE.surfaceAlt,
-                transition: "all 0.2s",
-              }}
-            >
-              <FileSpreadsheet
-                size={24}
-                color={dragOver ? "#fff" : PALETTE.textSec}
-                strokeWidth={1.5}
-              />
-            </div>
-            <p className="text-sm font-semibold mb-1" style={{ color: PALETTE.text }}>
-              파일을 드래그하거나 클릭하여 업로드
-            </p>
-            <p className="text-xs" style={{ color: PALETTE.textSec }}>
-              CSV, TSV 파일 지원 · UTF-8 인코딩
-            </p>
-          </div>
+        <div className="px-6 py-5 space-y-3" style={{ maxHeight: 500, overflowY: "auto" }}>
+          <FileSlot
+            label="팀별 실적"
+            subtitle="실적월, 부서명, 매출, 매출원가, 변동비, 운반비, 지급수수료, 광고선전비, 판매촉진비, 한계이익"
+            file={teamFile} result={teamResult} inputRef={teamInputRef}
+            onFile={(f) => handleFile(f, "team")}
+            onClear={() => { setTeamFile(null); setTeamResult(null); }}
+          />
+          <FileSlot
+            label="채널별 실적"
+            subtitle="실적월, 부서명, 채널명, 매출, 매출원가, 변동비, 운반비, 지급수수료, 광고선전비, 판매촉진비, 한계이익"
+            file={channelFile} result={channelResult} inputRef={channelInputRef}
+            onFile={(f) => handleFile(f, "channel")}
+            onClear={() => { setChannelFile(null); setChannelResult(null); }}
+          />
 
-          {/* Uploaded File Info */}
-          {uploadedFiles.length > 0 && (
-            <div
-              className="mt-4 rounded-xl p-4 flex items-center gap-3"
-              style={{ background: PALETTE.surface, border: `1px solid ${PALETTE.border}` }}
-            >
-              <div
-                className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
-                style={{ background: PALETTE.accent1 + "18" }}
-              >
-                <File size={18} color={PALETTE.accent1} />
+          {/* Upload Logs */}
+          {uploadLogs && uploadLogs.length > 0 && (
+            <div className="rounded-xl p-3" style={{ background: PALETTE.surfaceAlt, border: `1px solid ${PALETTE.border}` }}>
+              <p className="text-xs font-bold mb-2" style={{ color: PALETTE.textSec }}>업로드 이력</p>
+              <div className="space-y-1" style={{ maxHeight: 120, overflowY: "auto" }}>
+                {uploadLogs.slice().reverse().map((log, i) => (
+                  <div key={i} className="flex items-center gap-2 text-xs" style={{ color: PALETTE.textSec }}>
+                    <span style={{ color: PALETTE.text, fontWeight: 600 }}>{log.type === "team" ? "팀별" : "채널별"}</span>
+                    <span>{log.fileName}</span>
+                    <span className="ml-auto" style={{ fontSize: 10 }}>{log.date}</span>
+                  </div>
+                ))}
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold truncate" style={{ color: PALETTE.text }}>
-                  {uploadedFiles[0].name}
-                </p>
-                <p className="text-xs" style={{ color: PALETTE.textSec }}>
-                  {uploadedFiles[0].type} · {fmtFileSize(uploadedFiles[0].size)}
-                </p>
-              </div>
-              <button
-                onClick={(e) => { e.stopPropagation(); resetState(); }}
-                className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors flex-shrink-0"
-                style={{ background: PALETTE.surfaceAlt }}
-              >
-                <Trash2 size={14} color={PALETTE.accent4} />
-              </button>
             </div>
           )}
-
-          {/* Status Message */}
-          {parseStatus && (
-            <div
-              className="mt-4 rounded-xl p-4 flex items-start gap-3"
-              style={{
-                background: parseStatus === "success" ? "#e8f5ee" : parseStatus === "error" ? "#fef0ef" : PALETTE.surface,
-                border: `1px solid ${parseStatus === "success" ? "#b8dfc8" : parseStatus === "error" ? "#f5c6c2" : PALETTE.border}`,
-              }}
-            >
-              {parseStatus === "parsing" && (
-                <div
-                  className="w-5 h-5 rounded-full flex-shrink-0 mt-0.5"
-                  style={{
-                    background: `linear-gradient(90deg, ${PALETTE.border} 25%, ${PALETTE.surfaceAlt} 50%, ${PALETTE.border} 75%)`,
-                    backgroundSize: "200% 100%",
-                    animation: "shimmer 1.5s infinite",
-                  }}
-                />
-              )}
-              {parseStatus === "success" && <Check size={18} color="#16825d" className="flex-shrink-0 mt-0.5" />}
-              {parseStatus === "error" && <AlertCircle size={18} color={PALETTE.accent4} className="flex-shrink-0 mt-0.5" />}
-              <p
-                className="text-xs leading-relaxed whitespace-pre-wrap"
-                style={{
-                  color: parseStatus === "success" ? "#16825d" : parseStatus === "error" ? PALETTE.accent4 : PALETTE.textSec,
-                }}
-              >
-                {parseMessage}
-              </p>
-            </div>
-          )}
-
-          {/* Preview Table */}
-          {previewData && (
-            <div className="mt-4">
-              <p className="text-xs font-semibold mb-2" style={{ color: PALETTE.textSec }}>
-                인식된 채널 미리보기 (상위 5개)
-              </p>
-              <div
-                className="rounded-lg overflow-hidden"
-                style={{ border: `1px solid ${PALETTE.border}` }}
-              >
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr style={{ background: PALETTE.surface }}>
-                        {["채널", "소속팀", "1월 매출"].map(h => (
-                          <th
-                            key={h}
-                            className="px-3 py-2 text-left font-semibold whitespace-nowrap"
-                            style={{ color: PALETTE.primary, borderBottom: `1px solid ${PALETTE.border}` }}
-                          >
-                            {h}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {previewData.previewChannels.map((row, i) => (
-                        <tr key={i} style={{ background: i % 2 === 0 ? PALETTE.white : PALETTE.surface }}>
-                          <td className="px-3 py-2 whitespace-nowrap font-medium" style={{ color: PALETTE.text, borderBottom: `1px solid ${PALETTE.border}` }}>{row["채널"]}</td>
-                          <td className="px-3 py-2 whitespace-nowrap" style={{ color: PALETTE.textSec, borderBottom: `1px solid ${PALETTE.border}` }}>{row["팀"]}</td>
-                          <td className="px-3 py-2 whitespace-nowrap" style={{ color: PALETTE.text, borderBottom: `1px solid ${PALETTE.border}` }}>{fmt(row["1월 매출"])}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-              {previewData.channelCount > 5 && (
-                <p className="text-xs mt-1 text-right" style={{ color: PALETTE.textSec }}>
-                  외 {previewData.channelCount - 5}개 채널 더...
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* Template Info */}
-          <div
-            className="mt-4 rounded-xl p-4"
-            style={{ background: `${PALETTE.accent3}0a`, border: `1px solid ${PALETTE.accent3}30` }}
-          >
-            <p className="text-xs font-bold mb-2" style={{ color: PALETTE.accent3 }}>
-              📋 파일 형식 안내
-            </p>
-            <div className="space-y-1.5">
-              <p className="text-xs" style={{ color: PALETTE.text }}>
-                <span className="font-semibold">팀별 채널별 손익 실적</span> 양식의 CSV 파일
-              </p>
-              <p className="text-xs font-mono px-2 py-1 rounded" style={{ background: PALETTE.surface, color: PALETTE.textSec }}>
-                헤더: 팀, 채널, 항목, 누계, 1월, 2월, ..., 12월
-              </p>
-              <p className="text-xs" style={{ color: PALETTE.textSec }}>
-                전사 합계 및 개별 채널의 매출·매출원가·운반비·지급수수료·광고선전비·판매촉진비·한계이익·한계이익률 항목을 자동 인식합니다.
-              </p>
-            </div>
-          </div>
         </div>
 
         {/* Footer */}
-        <div
-          className="flex items-center justify-end gap-3 px-6 py-4"
-          style={{ borderTop: `1px solid ${PALETTE.border}`, background: PALETTE.surface }}
-        >
+        <div className="flex items-center justify-end gap-3 px-6 py-4" style={{ borderTop: `1px solid ${PALETTE.border}`, background: PALETTE.surface }}>
+          <button onClick={() => { onClose(); resetState(); }} className="px-4 py-2 rounded-lg text-xs font-semibold" style={{ color: PALETTE.textSec, background: PALETTE.white, border: `1px solid ${PALETTE.border}` }}>취소</button>
           <button
-            onClick={() => { onClose(); resetState(); }}
-            className="px-4 py-2 rounded-lg text-xs font-semibold transition-colors"
-            style={{ color: PALETTE.textSec, background: PALETTE.white, border: `1px solid ${PALETTE.border}` }}
-          >
-            취소
-          </button>
-          <button
-            onClick={handleApply}
-            disabled={parseStatus !== "success"}
+            onClick={handleApply} disabled={!canApply}
             className="px-5 py-2 rounded-lg text-xs font-semibold transition-all"
             style={{
-              background: parseStatus === "success"
-                ? `linear-gradient(135deg, ${PALETTE.primary}, ${PALETTE.primaryLight})`
-                : PALETTE.surfaceAlt,
-              color: parseStatus === "success" ? "#fff" : PALETTE.border,
-              cursor: parseStatus === "success" ? "pointer" : "not-allowed",
+              background: canApply ? `linear-gradient(135deg, ${PALETTE.primary}, ${PALETTE.primaryLight})` : PALETTE.surfaceAlt,
+              color: canApply ? "#fff" : PALETTE.border, cursor: canApply ? "pointer" : "not-allowed",
             }}
-          >
-            데이터 적용
-          </button>
+          >데이터 적용</button>
         </div>
       </div>
     </div>
@@ -851,26 +522,26 @@ const ProfitPoolChart = ({ data }) => {
   const [tooltip, setTooltip] = useState({ show: false, x: 0, y: 0 });
   const containerRef = useRef(null);
 
-  const margin = { top: 30, right: 20, bottom: 50, left: 55 };
+  const margin = { top: 30, right: 20, bottom: 50, left: 65 };
 
-  // Y-axis: 한계이익률
-  const maxMargin = Math.max(...data.map(d => Math.abs(d.영업이익률)), 10);
-  const minMargin = Math.min(...data.map(d => d.영업이익률), 0);
-  const yMax = Math.ceil(maxMargin / 10) * 10 + 10;
-  const yMin = minMargin < 0 ? Math.floor(minMargin / 10) * 10 - 10 : 0;
+  // Y-axis: 한계이익 (억원)
+  const profitValues = data.map(d => d.한계이익 / 1e8);
+  const maxProfit = Math.max(...profitValues.map(v => Math.abs(v)), 1);
+  const minProfit = Math.min(...profitValues, 0);
+  const yStep = maxProfit > 500 ? 200 : maxProfit > 200 ? 100 : maxProfit > 100 ? 50 : maxProfit > 50 ? 20 : maxProfit > 20 ? 10 : 5;
+  const yMax = Math.ceil(Math.max(...profitValues, 1) / yStep) * yStep + yStep;
+  const yMin = minProfit < 0 ? Math.floor(minProfit / yStep) * yStep - yStep : 0;
 
   // X-axis: cumulative revenue in 억원
   const totalRevenue = data.reduce((s, d) => s + d.매출, 0);
   const totalBillion = totalRevenue / 1e8;
-  // Nice x-axis max
   const xMaxRaw = totalBillion;
   const xStep = xMaxRaw > 2000 ? 500 : xMaxRaw > 1000 ? 200 : xMaxRaw > 500 ? 100 : xMaxRaw > 200 ? 50 : xMaxRaw > 100 ? 20 : 10;
   const xMax = Math.ceil(xMaxRaw / xStep) * xStep || 1;
 
-  // Cumulative x positions in 억
   let cumRevenue = 0;
   const barsWithX = data.map(d => {
-    const item = { ...d, xStart억: cumRevenue / 1e8, width억: d.매출 / 1e8 };
+    const item = { ...d, xStart억: cumRevenue / 1e8, width억: d.매출 / 1e8, profit억: d.한계이익 / 1e8 };
     cumRevenue += d.매출;
     return item;
   });
@@ -883,15 +554,12 @@ const ProfitPoolChart = ({ data }) => {
   };
 
   const yTicks = [];
-  for (let v = yMin; v <= yMax; v += yMax > 60 ? 20 : 10) yTicks.push(v);
-
-  const xTicks = [];
-  for (let v = 0; v <= xMax; v += xStep) xTicks.push(v);
+  for (let v = yMin; v <= yMax; v += yStep) yTicks.push(v);
 
   const chartW = 800 - margin.left - margin.right;
   const chartH = 400 - margin.top - margin.bottom;
   const toX = (억) => margin.left + (억 / xMax) * chartW;
-  const toY = (pct) => margin.top + ((yMax - pct) / (yMax - yMin)) * chartH;
+  const toY = (억) => margin.top + ((yMax - 억) / (yMax - yMin)) * chartH;
 
   return (
     <div ref={containerRef} className="relative" style={{ width: "100%", height: 400 }}>
@@ -900,12 +568,12 @@ const ProfitPoolChart = ({ data }) => {
         {yTicks.map(v => (
           <g key={v}>
             <line x1={margin.left} y1={toY(v)} x2={800 - margin.right} y2={toY(v)} stroke={PALETTE.border} strokeDasharray="3 3" />
-            <text x={margin.left - 8} y={toY(v) + 4} textAnchor="end" fontSize={10} fill={PALETTE.textSec}>{v}%</text>
+            <text x={margin.left - 8} y={toY(v) + 4} textAnchor="end" fontSize={10} fill={PALETTE.textSec}>{v.toLocaleString()}억</text>
           </g>
         ))}
 
-        {/* Axis labels */}
-        <text x={14} y={200} textAnchor="middle" fontSize={11} fill={PALETTE.textSec} fontWeight={600} transform="rotate(-90,14,200)">한계이익률 (%)</text>
+        {/* Axis label */}
+        <text x={14} y={200} textAnchor="middle" fontSize={11} fill={PALETTE.textSec} fontWeight={600} transform="rotate(-90,14,200)">한계이익 (억원)</text>
 
         {/* Zero line if needed */}
         {yMin < 0 && (
@@ -916,20 +584,21 @@ const ProfitPoolChart = ({ data }) => {
         {barsWithX.map((entry) => {
           const barX = toX(entry.xStart억);
           const barW = (entry.width억 / xMax) * chartW;
-          const marginVal = entry.영업이익률;
+          const profitVal = entry.profit억;
           const zeroY = toY(0);
           const isActive = hovered === entry.team;
 
           let barY, barH;
-          if (marginVal >= 0) {
-            barY = toY(marginVal);
+          if (profitVal >= 0) {
+            barY = toY(profitVal);
             barH = zeroY - barY;
           } else {
             barY = zeroY;
-            barH = toY(marginVal) - zeroY;
+            barH = toY(profitVal) - zeroY;
           }
 
-          const labelY = marginVal >= 0 ? barY - 6 : barY + barH + 14;
+          const marginPct = entry.영업이익률;
+          const labelY = profitVal >= 0 ? barY - 6 : barY + barH + 14;
           const labelX = barX + barW / 2;
 
           return (
@@ -950,10 +619,11 @@ const ProfitPoolChart = ({ data }) => {
                 stroke={isActive ? entry.color : "none"}
                 strokeWidth={isActive ? 2 : 0}
               />
-              {barW > 30 && (
+              {/* Team name inside bar */}
+              {barW > 30 && barH > 16 && (
                 <text
                   x={labelX}
-                  y={marginVal >= 0 ? barY + Math.min(barH / 2 + 4, barH - 4) : barY + Math.min(barH / 2 + 4, barH - 4)}
+                  y={profitVal >= 0 ? barY + Math.min(barH / 2 + 4, barH - 4) : barY + Math.min(barH / 2 + 4, barH - 4)}
                   textAnchor="middle"
                   fontSize={barW > 80 ? 11 : 9}
                   fontWeight={600}
@@ -963,6 +633,7 @@ const ProfitPoolChart = ({ data }) => {
                   {entry.team.length > (barW > 80 ? 12 : 6) ? entry.team.slice(0, barW > 80 ? 12 : 6) + "…" : entry.team}
                 </text>
               )}
+              {/* Margin % label above/below */}
               <text
                 x={labelX}
                 y={labelY}
@@ -972,7 +643,7 @@ const ProfitPoolChart = ({ data }) => {
                 fill={entry.color}
                 style={{ pointerEvents: "none" }}
               >
-                {marginVal.toFixed(1)}%
+                {marginPct.toFixed(1)}%
               </text>
             </g>
           );
@@ -1026,24 +697,42 @@ export default function ChannelDashboard() {
   const [globalMonth, setGlobalMonth] = useState("1월");
   const [showUpload, setShowUpload] = useState(false);
   const [storageLoading, setStorageLoading] = useState(true);
+  const [navSection, setNavSection] = useState("overview");
 
   // Mutable data state
-  const [companyMonthly, setCompanyMonthly] = useState(defaultCompanyMonthly);
-  const [channelData, setChannelData] = useState(defaultChannelData);
+  const [teamData, setTeamData] = useState({});
+  const [channelData, setChannelData] = useState({});
+  const [uploadLogs, setUploadLogs] = useState([]);
+
+  // Derive companyMonthly from teamData (sum of all teams)
+  const companyMonthly = useMemo(() => {
+    const teams = Object.values(teamData);
+    if (teams.length === 0) return EMPTY_COMPANY_MONTHLY;
+    return MONTHS.map((m, i) => {
+      const sum = (key) => teams.reduce((s, t) => s + (t.monthly[i]?.[key] || 0), 0);
+      const 매출 = sum("매출");
+      const 한계이익 = sum("한계이익");
+      return {
+        month: m, 매출, 매출원가: sum("매출원가"), 변동비: sum("변동비"),
+        고정비: 0, 영업이익: 한계이익,
+        영업이익률: 매출 > 0 ? (한계이익 / 매출) * 100 : 0,
+      };
+    });
+  }, [teamData]);
 
   // ── Persistent Storage (shared) ──
-  // Load saved data on mount
   useEffect(() => {
     const loadData = async () => {
       try {
-        const result = await window.storage.get("dashboard-data", true);
+        const result = await window.storage.get("dashboard-data-v2", true);
         if (result && result.value) {
           const parsed = JSON.parse(result.value);
-          if (parsed.companyMonthly) setCompanyMonthly(parsed.companyMonthly);
+          if (parsed.teamData) setTeamData(parsed.teamData);
           if (parsed.channelData) setChannelData(parsed.channelData);
+          if (parsed.uploadLogs) setUploadLogs(parsed.uploadLogs);
         }
       } catch (e) {
-        // No saved data or error — use defaults
+        // No saved data — use defaults
       } finally {
         setStorageLoading(false);
       }
@@ -1051,16 +740,41 @@ export default function ChannelDashboard() {
     loadData();
   }, []);
 
-  // Save to storage helper
-  const saveToStorage = async (company, channel) => {
+  const saveToStorage = async (newTeamData, newChannelData, newLogs) => {
     try {
       await window.storage.set(
-        "dashboard-data",
-        JSON.stringify({ companyMonthly: company, channelData: channel, updatedAt: new Date().toISOString() }),
-        true // shared: visible to all users
+        "dashboard-data-v2",
+        JSON.stringify({ teamData: newTeamData, channelData: newChannelData, uploadLogs: newLogs, updatedAt: new Date().toISOString() }),
+        true
       );
     } catch (e) {
       console.error("Storage save failed:", e);
+    }
+  };
+
+  const teamDataRef = useRef(teamData);
+  const channelDataRef = useRef(channelData);
+  const uploadLogsRef = useRef(uploadLogs);
+  teamDataRef.current = teamData;
+  channelDataRef.current = channelData;
+  uploadLogsRef.current = uploadLogs;
+
+  const handleDataLoaded = ({ type, data, fileName }) => {
+    const now = new Date();
+    const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")} ${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
+    const newLog = { type, fileName: fileName || "unknown", date: dateStr };
+    const newLogs = [...uploadLogsRef.current, newLog];
+    setUploadLogs(newLogs);
+    uploadLogsRef.current = newLogs;
+
+    if (type === "team") {
+      setTeamData(data);
+      teamDataRef.current = data;
+      saveToStorage(data, channelDataRef.current, newLogs);
+    } else {
+      setChannelData(data);
+      channelDataRef.current = data;
+      saveToStorage(teamDataRef.current, data, newLogs);
     }
   };
 
@@ -1078,12 +792,13 @@ export default function ChannelDashboard() {
   const [selectedTeam, setSelectedTeam] = useState("전체");
   const [showChannelFilter, setShowChannelFilter] = useState(false);
 
-  // Derive all teams
+  // Derive all teams (from both teamData and channelData)
   const ALL_TEAMS = useMemo(() => {
     const teams = new Set();
+    Object.keys(teamData).forEach(t => teams.add(t));
     ALL_CHANNELS.forEach(ch => teams.add(channelData[ch].team));
     return ["전체", ...Array.from(teams)];
-  }, [ALL_CHANNELS, channelData]);
+  }, [ALL_CHANNELS, channelData, teamData]);
 
   // Stable team → color mapping (order won't change across months)
   const TEAM_COLOR_MAP = useMemo(() => {
@@ -1132,25 +847,6 @@ export default function ChannelDashboard() {
     });
   };
 
-  const pendingCompanyRef = useRef(null);
-
-  const handleDataLoaded = ({ type, data, isLast }) => {
-    if (type === "company") {
-      pendingCompanyRef.current = data;
-      setCompanyMonthly(data);
-      // If only company data (no channel), save immediately
-      if (isLast) {
-        saveToStorage(data, channelData);
-        pendingCompanyRef.current = null;
-      }
-    } else {
-      setChannelData(data);
-      const companyToSave = pendingCompanyRef.current || companyMonthly;
-      pendingCompanyRef.current = null;
-      saveToStorage(companyToSave, data);
-    }
-  };
-
   // ─ Derived data ─
   // Global month → KPI only
   const isYearly = globalMonth === "전체";
@@ -1184,10 +880,23 @@ export default function ChannelDashboard() {
     return channelData[ch].monthly[MONTHS.indexOf(m)];
   };
 
-  // Backward-compat wrapper using globalMonth
-  const getChannelMonth = (ch) => getChannelMonthBy(ch, globalMonth);
+  // Helper: get team data for a specific month (or yearly)
+  const getTeamMonthBy = (team, m) => {
+    const t = teamData[team];
+    if (!t) return { 매출: 0, 매출원가: 0, 변동비: 0, 운반비: 0, 지급수수료: 0, 광고선전비: 0, 판매촉진비: 0, 한계이익: 0 };
+    if (m === "전체") {
+      const all = t.monthly;
+      const sum = (k) => all.reduce((s, d) => s + (d[k] || 0), 0);
+      return {
+        매출: sum("매출"), 매출원가: sum("매출원가"), 변동비: sum("변동비"),
+        운반비: sum("운반비"), 지급수수료: sum("지급수수료"), 광고선전비: sum("광고선전비"),
+        판매촉진비: sum("판매촉진비"), 한계이익: sum("한계이익"),
+      };
+    }
+    return t.monthly[MONTHS.indexOf(m)] || { 매출: 0, 매출원가: 0, 변동비: 0, 운반비: 0, 지급수수료: 0, 광고선전비: 0, 판매촉진비: 0, 한계이익: 0 };
+  };
 
-  const labelFor = (m) => m === "전체" ? "연간 누계" : `${m} 기준`;
+  const ALL_TEAM_NAMES = useMemo(() => Object.keys(teamData), [teamData]);
 
   // Company row for KPI (uses globalMonth)
   const companyRow = useMemo(() => {
@@ -1239,63 +948,29 @@ export default function ChannelDashboard() {
 
   // Section 1.75: Team cost comparison (uses teamCostMonth), sorted by revenue desc
   const teamCostData = useMemo(() => {
-    const teamMap = {};
-    ALL_CHANNELS.forEach((ch) => {
-      const team = channelData[ch].team;
-      const d = getChannelMonthBy(ch, teamCostMonth);
-      if (!teamMap[team]) {
-        teamMap[team] = { team, 매출: 0, 매출원가: 0, 운반비: 0, 지급수수료: 0, 광고선전비: 0, 판매촉진비: 0 };
-      }
-      teamMap[team].매출 += d.매출;
-      teamMap[team].매출원가 += d.매출원가;
-      teamMap[team].운반비 += d.운반비;
-      teamMap[team].지급수수료 += d.지급수수료;
-      teamMap[team].광고선전비 += d.광고선전비;
-      teamMap[team].판매촉진비 += d.판매촉진비;
-    });
-    return Object.values(teamMap)
-      .filter(t => t.매출 > 0)
-      .sort((a, b) => b.매출 - a.매출)
-      .map(t => {
-        const rev = t.매출 || 1;
-        return {
-          channel: t.team.length > 10 ? t.team.slice(0, 10) + "…" : t.team,
-          channelFull: t.team,
-          매출원가: t.매출원가,
-          운반비: t.운반비,
-          지급수수료: t.지급수수료,
-          광고선전비: t.광고선전비,
-          판매촉진비: t.판매촉진비,
-          매출: t.매출,
-          매출원가율: t.매출 > 0 ? ((t.매출원가 / rev) * 100) : 0,
-          운반비율: t.매출 > 0 ? ((t.운반비 / rev) * 100) : 0,
-          지급수수료율: t.매출 > 0 ? ((t.지급수수료 / rev) * 100) : 0,
-          광고선전비율: t.매출 > 0 ? ((t.광고선전비 / rev) * 100) : 0,
-          판매촉진비율: t.매출 > 0 ? ((t.판매촉진비 / rev) * 100) : 0,
-        };
-      });
-  }, [teamCostMonth, channelData, ALL_CHANNELS]);
+    return ALL_TEAM_NAMES.map(team => {
+      const d = getTeamMonthBy(team, teamCostMonth);
+      const rev = d.매출 || 1;
+      return {
+        channel: team.length > 10 ? team.slice(0, 10) + "…" : team,
+        channelFull: team,
+        매출원가: d.매출원가, 운반비: d.운반비, 지급수수료: d.지급수수료,
+        광고선전비: d.광고선전비, 판매촉진비: d.판매촉진비, 매출: d.매출,
+        매출원가율: d.매출 > 0 ? ((d.매출원가 / rev) * 100) : 0,
+        운반비율: d.매출 > 0 ? ((d.운반비 / rev) * 100) : 0,
+        지급수수료율: d.매출 > 0 ? ((d.지급수수료 / rev) * 100) : 0,
+        광고선전비율: d.매출 > 0 ? ((d.광고선전비 / rev) * 100) : 0,
+        판매촉진비율: d.매출 > 0 ? ((d.판매촉진비 / rev) * 100) : 0,
+      };
+    }).filter(t => t.매출 > 0).sort((a, b) => b.매출 - a.매출);
+  }, [teamCostMonth, teamData, ALL_TEAM_NAMES]);
 
   // Section 1.5: Team Profit Pool (uses teamPoolMonth)
   const teamProfitPoolData = useMemo(() => {
-    const teamMap = {};
-    ALL_CHANNELS.forEach((ch) => {
-      const team = channelData[ch].team;
-      const d = getChannelMonthBy(ch, teamPoolMonth);
-      if (!teamMap[team]) {
-        teamMap[team] = { team, 매출: 0, 한계이익: 0 };
-      }
-      teamMap[team].매출 += d.매출;
-      teamMap[team].한계이익 += d.한계이익;
-    });
-
-    const teams = Object.values(teamMap)
-      .filter(t => t.매출 > 0)
-      .sort((a, b) => {
-        const marginA = a.매출 > 0 ? (a.한계이익 / a.매출) * 100 : 0;
-        const marginB = b.매출 > 0 ? (b.한계이익 / b.매출) * 100 : 0;
-        return marginB - marginA;
-      });
+    const teams = ALL_TEAM_NAMES.map(team => {
+      const d = getTeamMonthBy(team, teamPoolMonth);
+      return { team, 매출: d.매출, 한계이익: d.한계이익 };
+    }).filter(t => t.매출 > 0).sort((a, b) => b.매출 - a.매출);
 
     const totalRevenue = teams.reduce((s, t) => s + t.매출, 0);
     if (totalRevenue === 0) return [];
@@ -1305,18 +980,14 @@ export default function ChannelDashboard() {
       const shareWidth = (t.매출 / totalRevenue) * 100;
       const margin = t.매출 > 0 ? (t.한계이익 / t.매출) * 100 : 0;
       const item = {
-        team: t.team,
-        매출: t.매출,
-        한계이익: t.한계이익,
-        영업이익률: margin,
-        shareWidth,
-        x: cumX,
+        team: t.team, 매출: t.매출, 한계이익: t.한계이익,
+        영업이익률: margin, shareWidth, x: cumX,
         color: TEAM_COLOR_MAP[t.team] || TEAM_COLORS[i % TEAM_COLORS.length],
       };
       cumX += shareWidth;
       return item;
     });
-  }, [teamPoolMonth, channelData, ALL_CHANNELS]);
+  }, [teamPoolMonth, teamData, ALL_TEAM_NAMES]);
 
   // Section 3: Table top 10 (uses tableMonth)
   const top10TableChannels = useMemo(() => {
@@ -1359,12 +1030,8 @@ export default function ChannelDashboard() {
       }
     }
 
-    // Sort by margin descending
-    entries.sort((a, b) => {
-      const mA = a.매출 > 0 ? (a.한계이익 / a.매출) * 100 : 0;
-      const mB = b.매출 > 0 ? (b.한계이익 / b.매출) * 100 : 0;
-      return mB - mA;
-    });
+    // Sort by revenue descending (biggest left)
+    entries.sort((a, b) => b.매출 - a.매출);
 
     const totalRevenue = entries.reduce((s, t) => s + t.매출, 0);
     if (totalRevenue === 0) return [];
@@ -1414,7 +1081,7 @@ export default function ChannelDashboard() {
 
   return (
     <div
-      className="min-h-screen w-full"
+      className="min-h-screen w-full flex"
       style={{
         background: `linear-gradient(180deg, ${PALETTE.surface} 0%, #fff 100%)`,
         fontFamily: "'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif",
@@ -1434,40 +1101,99 @@ export default function ChannelDashboard() {
         isOpen={showUpload}
         onClose={() => setShowUpload(false)}
         onDataLoaded={handleDataLoaded}
+        uploadLogs={uploadLogs}
       />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {/* ── Header ── */}
-        <div className="mb-8 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-3 mb-1">
-              <div
-                className="w-1.5 h-8 rounded-full"
-                style={{ background: `linear-gradient(180deg, ${PALETTE.accent3}, ${PALETTE.accent4})` }}
-              />
-              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight" style={{ color: PALETTE.primary }}>
-                2026 실적 대시보드
-              </h1>
+      {/* ── Sidebar ── */}
+      <aside
+        className="flex-shrink-0 sticky top-0 h-screen flex flex-col"
+        style={{
+          width: 220,
+          background: PALETTE.white,
+          borderRight: `1px solid ${PALETTE.border}`,
+          zIndex: 20,
+        }}
+      >
+        {/* Logo area */}
+        <div className="px-5 py-5" style={{ borderBottom: `1px solid ${PALETTE.border}` }}>
+          <div className="flex items-center gap-2.5">
+            <div
+              className="w-8 h-8 rounded-lg flex items-center justify-center"
+              style={{ background: `linear-gradient(135deg, ${PALETTE.primary}, ${PALETTE.primaryLight})` }}
+            >
+              <BarChart3 size={16} color="#fff" />
             </div>
-            <p className="text-sm ml-5" style={{ color: PALETTE.textSec }}>
-              팀별 채널별 손익 실적 현황
-            </p>
+            <div>
+              <p className="text-sm font-extrabold tracking-tight" style={{ color: PALETTE.primary }}>2026</p>
+              <p className="text-xs font-medium" style={{ color: PALETTE.textSec, marginTop: -2 }}>실적 대시보드</p>
+            </div>
           </div>
+        </div>
+
+        {/* Nav items */}
+        <nav className="flex-1 px-3 py-4 space-y-1">
+          {[
+            { key: "overview", label: "Overview", icon: LayoutDashboard },
+            { key: "team", label: "팀별 분석", icon: Users },
+            { key: "channel", label: "채널별 분석", icon: Store },
+          ].map(({ key, label, icon: Icon }) => {
+            const active = navSection === key;
+            return (
+              <button
+                key={key}
+                onClick={() => setNavSection(key)}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200"
+                style={{
+                  background: active ? `${PALETTE.primary}0d` : "transparent",
+                  color: active ? PALETTE.primary : PALETTE.textSec,
+                  fontWeight: active ? 700 : 500,
+                }}
+              >
+                <Icon size={18} strokeWidth={active ? 2.2 : 1.8} />
+                {label}
+                {active && (
+                  <div
+                    className="ml-auto w-1.5 h-5 rounded-full"
+                    style={{ background: `linear-gradient(180deg, ${PALETTE.accent3}, ${PALETTE.accent4})` }}
+                  />
+                )}
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* Upload button at bottom */}
+        <div className="px-3 py-4" style={{ borderTop: `1px solid ${PALETTE.border}` }}>
           <button
             onClick={() => setShowUpload(true)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 self-start"
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all duration-200"
             style={{
               background: `linear-gradient(135deg, ${PALETTE.primary}, ${PALETTE.primaryLight})`,
               color: "#fff",
-              boxShadow: "0 2px 8px rgba(45,62,71,0.25)",
+              boxShadow: "0 2px 8px rgba(45,62,71,0.2)",
             }}
-            onMouseEnter={(e) => { e.currentTarget.style.boxShadow = "0 4px 16px rgba(45,62,71,0.35)"; e.currentTarget.style.transform = "translateY(-1px)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.boxShadow = "0 2px 8px rgba(45,62,71,0.25)"; e.currentTarget.style.transform = "translateY(0)"; }}
           >
-            <Upload size={16} strokeWidth={2.2} />
+            <Upload size={14} strokeWidth={2.2} />
             데이터 업로드
           </button>
         </div>
+      </aside>
+
+      {/* ── Main Content ── */}
+      <main className="flex-1 min-w-0">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* ── Page Title ── */}
+        <div className="mb-6">
+          <h1 className="text-2xl font-extrabold tracking-tight" style={{ color: PALETTE.primary }}>
+            {navSection === "overview" ? "Overview" : navSection === "team" ? "팀별 분석" : "채널별 분석"}
+          </h1>
+          <p className="text-sm mt-0.5" style={{ color: PALETTE.textSec }}>
+            {navSection === "overview" ? "전사 실적 현황" : navSection === "team" ? "팀별 손익 및 비용 구조" : "채널별 손익 및 비용 구조"}
+          </p>
+        </div>
+
+        {/* ══════ OVERVIEW ══════ */}
+        {navSection === "overview" && (<>
 
         {/* ── Global Month Filter ── */}
         <div
@@ -1533,7 +1259,7 @@ export default function ChannelDashboard() {
                 <Bar
                   yAxisId="left"
                   dataKey="매출"
-                  fill={PALETTE.primary}
+                  fill="#4682B4"
                   radius={[4, 4, 0, 0]}
                   name="매출"
                   barSize={36}
@@ -1551,6 +1277,11 @@ export default function ChannelDashboard() {
             </ResponsiveContainer>
           </div>
         </div>
+
+        </>)}
+
+        {/* ══════ TEAM ══════ */}
+        {navSection === "team" && (<>
 
         {/* ── 팀별 분석 Divider ── */}
         <div className="flex items-center gap-3 mb-6 mt-2">
@@ -1571,7 +1302,7 @@ export default function ChannelDashboard() {
         >
           <SectionHeader
             title="팀별 Profit Pool"
-            subtitle="Y축: 한계이익률(%) · 너비: 매출 규모"
+            subtitle="Y축: 한계이익(억원) · 너비: 매출 규모 · 레이블: 한계이익률"
           >
             <div className="flex gap-1 overflow-x-auto pb-1">
               <FilterPill label="전체" active={teamPoolMonth === "전체"} onClick={() => setTeamPoolMonth("전체")} />
@@ -1653,6 +1384,11 @@ export default function ChannelDashboard() {
           </div>
         </div>
 
+        </>)}
+
+        {/* ══════ CHANNEL ══════ */}
+        {navSection === "channel" && (<>
+
         {/* ── 채널별 분석 Divider ── */}
         <div className="flex items-center gap-3 mb-6 mt-2">
           <div
@@ -1672,7 +1408,7 @@ export default function ChannelDashboard() {
         >
           <SectionHeader
             title="매출 Top 10 채널 Profit Pool"
-            subtitle="Y축: 한계이익률(%) · 너비: 매출 규모"
+            subtitle="Y축: 한계이익(억원) · 너비: 매출 규모 · 레이블: 한계이익률"
           >
             <div className="flex gap-1 overflow-x-auto pb-1">
               <FilterPill label="전체" active={channelPoolMonth === "전체"} onClick={() => setChannelPoolMonth("전체")} />
@@ -1704,94 +1440,82 @@ export default function ChannelDashboard() {
                 <FilterPill key={m} label={m} active={costMonth === m} onClick={() => setCostMonth(m)} />
               ))}
             </div>
-          </SectionHeader>
-
-          {/* Team & Channel Filter */}
-          <div className="mb-4">
-            <div className="flex items-center gap-2 flex-wrap">
-              {/* Team Dropdown */}
-              <div className="relative">
-                <select
-                  value={selectedTeam}
-                  onChange={(e) => setSelectedTeam(e.target.value)}
-                  className="appearance-none pl-3 pr-7 py-1.5 rounded-lg text-xs font-medium cursor-pointer"
-                  style={{
-                    background: PALETTE.surfaceAlt,
-                    color: selectedTeam === "전체" ? PALETTE.textSec : PALETTE.primary,
-                    border: `1px solid ${PALETTE.border}`,
-                    outline: "none",
-                  }}
+            {/* Team & Channel Filter */}
+            <div className="mt-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="relative">
+                  <select
+                    value={selectedTeam}
+                    onChange={(e) => setSelectedTeam(e.target.value)}
+                    className="appearance-none pl-3 pr-7 py-1.5 rounded-lg text-xs font-medium cursor-pointer"
+                    style={{
+                      background: PALETTE.surfaceAlt,
+                      color: selectedTeam === "전체" ? PALETTE.textSec : PALETTE.primary,
+                      border: `1px solid ${PALETTE.border}`,
+                      outline: "none",
+                    }}
+                  >
+                    {ALL_TEAMS.map(t => (
+                      <option key={t} value={t}>{t === "전체" ? "팀 전체" : t}</option>
+                    ))}
+                  </select>
+                  <ChevronDown size={12} color={PALETTE.textSec} className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+                </div>
+                <button
+                  onClick={() => setShowChannelFilter(!showChannelFilter)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+                  style={{ background: PALETTE.surfaceAlt, color: PALETTE.textSec, border: `1px solid ${PALETTE.border}` }}
                 >
-                  {ALL_TEAMS.map(t => (
-                    <option key={t} value={t}>{t === "전체" ? "팀 전체" : t}</option>
-                  ))}
-                </select>
-                <ChevronDown size={12} color={PALETTE.textSec} className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <Filter size={13} />
+                  채널 선택 ({filteredChannels.filter(ch => selectedChannels.has(ch)).length}/{filteredChannels.length})
+                  {showChannelFilter ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                </button>
               </div>
-
-              {/* Channel Filter Toggle */}
-              <button
-                onClick={() => setShowChannelFilter(!showChannelFilter)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
-                style={{ background: PALETTE.surfaceAlt, color: PALETTE.textSec, border: `1px solid ${PALETTE.border}` }}
-              >
-                <Filter size={13} />
-                채널 선택 ({filteredChannels.filter(ch => selectedChannels.has(ch)).length}/{filteredChannels.length})
-                {showChannelFilter ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-              </button>
-            </div>
-
-            {showChannelFilter && (
-              <div
-                className="mt-2 rounded-xl p-3"
-                style={{ background: PALETTE.surfaceAlt, border: `1px solid ${PALETTE.border}` }}
-              >
-                {/* Select all / Deselect all */}
-                <div className="flex gap-2 mb-2 pb-2" style={{ borderBottom: `1px solid ${PALETTE.border}` }}>
-                  <button
-                    onClick={selectAllFiltered}
-                    className="px-2.5 py-1 rounded-md text-xs font-medium"
-                    style={{ background: PALETTE.primary, color: "#fff" }}
-                  >
-                    전체 선택
-                  </button>
-                  <button
-                    onClick={deselectAllFiltered}
-                    className="px-2.5 py-1 rounded-md text-xs font-medium"
-                    style={{ background: PALETTE.white, color: PALETTE.textSec, border: `1px solid ${PALETTE.border}` }}
-                  >
-                    전체 해제
-                  </button>
-                </div>
-                {/* Checkbox list */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-1">
-                  {filteredChannels.map((ch) => (
-                    <label
-                      key={ch}
-                      className="flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition-all text-xs"
-                      style={{
-                        background: selectedChannels.has(ch) ? `${CHANNEL_COLORS[ch]}12` : "transparent",
-                      }}
+              {showChannelFilter && (
+                <div
+                  className="mt-2 rounded-xl p-3"
+                  style={{ background: PALETTE.surfaceAlt, border: `1px solid ${PALETTE.border}` }}
+                >
+                  <div className="flex gap-2 mb-2 pb-2" style={{ borderBottom: `1px solid ${PALETTE.border}` }}>
+                    <button
+                      onClick={selectAllFiltered}
+                      className="px-2.5 py-1 rounded-md text-xs font-medium"
+                      style={{ background: PALETTE.primary, color: "#fff" }}
                     >
-                      <input
-                        type="checkbox"
-                        checked={selectedChannels.has(ch)}
-                        onChange={() => toggleChannel(ch)}
-                        className="rounded"
-                        style={{ accentColor: CHANNEL_COLORS[ch] || PALETTE.accent1, width: 14, height: 14 }}
-                      />
-                      <span
-                        className="truncate font-medium"
-                        style={{ color: selectedChannels.has(ch) ? PALETTE.text : PALETTE.textSec }}
+                      전체 선택
+                    </button>
+                    <button
+                      onClick={deselectAllFiltered}
+                      className="px-2.5 py-1 rounded-md text-xs font-medium"
+                      style={{ background: PALETTE.white, color: PALETTE.textSec, border: `1px solid ${PALETTE.border}` }}
+                    >
+                      전체 해제
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-1">
+                    {filteredChannels.map((ch) => (
+                      <label
+                        key={ch}
+                        className="flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition-all text-xs"
+                        style={{ background: selectedChannels.has(ch) ? `${CHANNEL_COLORS[ch]}12` : "transparent" }}
                       >
-                        {ch}
-                      </span>
-                    </label>
-                  ))}
+                        <input
+                          type="checkbox"
+                          checked={selectedChannels.has(ch)}
+                          onChange={() => toggleChannel(ch)}
+                          className="rounded"
+                          style={{ accentColor: CHANNEL_COLORS[ch] || PALETTE.accent1, width: 14, height: 14 }}
+                        />
+                        <span className="truncate font-medium" style={{ color: selectedChannels.has(ch) ? PALETTE.text : PALETTE.textSec }}>
+                          {ch}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          </SectionHeader>
 
           {/* Cost legend */}
           <div className="flex flex-wrap gap-3 mb-4">
@@ -1849,8 +1573,13 @@ export default function ChannelDashboard() {
           <SectionHeader
             title="채널별 실적 요약"
           >
-            <div className="flex items-center gap-2 flex-wrap">
-              {/* Team filter for table */}
+            <div className="flex gap-1 overflow-x-auto pb-1">
+              <FilterPill label="전체" active={tableMonth === "전체"} onClick={() => setTableMonth("전체")} />
+              {MONTHS.map((m) => (
+                <FilterPill key={m} label={m} active={tableMonth === m} onClick={() => setTableMonth(m)} />
+              ))}
+            </div>
+            <div className="flex items-center gap-2 mt-2">
               <div className="relative">
                 <select
                   value={tableTeam}
@@ -1868,12 +1597,6 @@ export default function ChannelDashboard() {
                   ))}
                 </select>
                 <ChevronDown size={12} color={PALETTE.textSec} className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
-              </div>
-              <div className="flex gap-1 overflow-x-auto pb-1">
-                <FilterPill label="전체" active={tableMonth === "전체"} onClick={() => setTableMonth("전체")} />
-                {MONTHS.map((m) => (
-                  <FilterPill key={m} label={m} active={tableMonth === m} onClick={() => setTableMonth(m)} />
-                ))}
               </div>
             </div>
           </SectionHeader>
@@ -1921,7 +1644,7 @@ export default function ChannelDashboard() {
                             color: d.한계이익률 >= 40 ? "#16825d" : d.한계이익률 >= 20 ? "#b87b00" : PALETTE.accent4,
                           }}
                         >
-                          {d.한계이익률 > 0 ? d.한계이익률 + "%" : "—"}
+                          {d.한계이익률 !== 0 ? Number(d.한계이익률).toFixed(1) + "%" : "—"}
                         </span>
                       </td>
                     </tr>
@@ -1932,8 +1655,10 @@ export default function ChannelDashboard() {
           </div>
         </div>
 
+        </>)}
 
-      </div>
+        </div>
+      </main>
     </div>
   );
 }
