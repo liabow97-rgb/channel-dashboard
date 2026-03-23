@@ -13,6 +13,10 @@ import {
 // ── Data ──────────────────────────────────────────────
 const MONTHS = ["1월","2월","3월","4월","5월","6월","7월","8월","9월","10월","11월","12월"];
 
+// ── Google Sheets CSV URLs ───────────────────────────
+const GSHEET_TEAM_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSiHuxubXQn_N4x-K_D6Gj6cFqFnmzBK3RaXZskRnfZSRBmo0_yfSTwOh_k80saMwiK-UWkRWw3Mmdp/pub?gid=0&single=true&output=csv";
+const GSHEET_CHANNEL_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSiHuxubXQn_N4x-K_D6Gj6cFqFnmzBK3RaXZskRnfZSRBmo0_yfSTwOh_k80saMwiK-UWkRWw3Mmdp/pub?gid=196016256&single=true&output=csv";
+
 const EMPTY_COMPANY_MONTHLY = MONTHS.map(m => ({
   month: m, 매출: 0, 매출원가: 0, 변동비: 0, 고정비: 0, 영업이익: 0, 영업이익률: 0,
 }));
@@ -720,11 +724,32 @@ export default function ChannelDashboard() {
     });
   }, [teamData]);
 
-  // ── Persistent Storage (shared) ──
+  // ── Load data: Google Sheets (primary) → Storage (fallback) ──
   useEffect(() => {
-    const loadData = async () => {
+    const fetchGoogleSheets = async () => {
       try {
-        const result = await window.storage.get("dashboard-data-v2", true);
+        const [teamRes, channelRes] = await Promise.all([
+          fetch(GSHEET_TEAM_URL),
+          fetch(GSHEET_CHANNEL_URL),
+        ]);
+        if (!teamRes.ok || !channelRes.ok) throw new Error("Fetch failed");
+        const teamText = await teamRes.text();
+        const channelText = await channelRes.text();
+
+        const teamResult = parseTeamCSV(teamText);
+        const channelResult = parseChannelCSV(channelText);
+
+        if (teamResult && teamResult.teamCount > 0) setTeamData(teamResult.teamData);
+        if (channelResult && channelResult.channelCount > 0) setChannelData(channelResult.channelData);
+        return true;
+      } catch (e) {
+        return false;
+      }
+    };
+
+    const loadFromStorage = async () => {
+      try {
+        const result = await window.storage?.get("dashboard-data-v2", true);
         if (result && result.value) {
           const parsed = JSON.parse(result.value);
           if (parsed.teamData) setTeamData(parsed.teamData);
@@ -732,23 +757,29 @@ export default function ChannelDashboard() {
           if (parsed.uploadLogs) setUploadLogs(parsed.uploadLogs);
         }
       } catch (e) {
-        // No saved data — use defaults
-      } finally {
-        setStorageLoading(false);
+        // No storage available
       }
+    };
+
+    const loadData = async () => {
+      const sheetsOk = await fetchGoogleSheets();
+      if (!sheetsOk) await loadFromStorage();
+      setStorageLoading(false);
     };
     loadData();
   }, []);
 
   const saveToStorage = async (newTeamData, newChannelData, newLogs) => {
     try {
-      await window.storage.set(
-        "dashboard-data-v2",
-        JSON.stringify({ teamData: newTeamData, channelData: newChannelData, uploadLogs: newLogs, updatedAt: new Date().toISOString() }),
-        true
-      );
+      if (window.storage?.set) {
+        await window.storage.set(
+          "dashboard-data-v2",
+          JSON.stringify({ teamData: newTeamData, channelData: newChannelData, uploadLogs: newLogs, updatedAt: new Date().toISOString() }),
+          true
+        );
+      }
     } catch (e) {
-      console.error("Storage save failed:", e);
+      // Storage not available (e.g. GitHub Pages)
     }
   };
 
@@ -1073,7 +1104,7 @@ export default function ChannelDashboard() {
             <BarChart3 size={20} color="#fff" />
           </div>
           <p className="text-sm font-semibold" style={{ color: PALETTE.text }}>대시보드 로딩 중...</p>
-          <p className="text-xs mt-1" style={{ color: PALETTE.textSec }}>저장된 데이터를 불러오고 있습니다</p>
+          <p className="text-xs mt-1" style={{ color: PALETTE.textSec }}>Google Sheets에서 데이터를 불러오고 있습니다</p>
         </div>
       </div>
     );
